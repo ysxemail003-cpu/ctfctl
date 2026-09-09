@@ -650,3 +650,37 @@ v0.4.0  索引、CLI 拆分和更强 sandbox
 - 生成最终报告，列出实际完成项、未完成项和残余风险。
 
 > 本文完成的是方案落位，不代表上述代码任务已经实施。后续开发者应以本文为执行合同，并在每个阶段结束后更新实施状态或追加变更记录。
+
+## 12. 实施状态记录（第一批，2026-09-09）
+
+> 本文档同时是实施合同与变更记录。以下为本轮（Phase 0 + 第一批任务 1-8）的实际执行状态。
+
+### 已完成
+
+- **Phase 0 质量门禁**：Git 基线提交；版本号单一来源（`pyproject.toml` → `ctf_agent/_version.py` → CLI/`__version__`）；`make test/lint/typecheck/coverage/check/build`；ruff/mypy/pytest-cov；`.github/workflows/ci.yml`；CHANGELOG。
+- **第一批 #1 Git baseline**：`a30bf84 baseline: ctf-agent v0.2.0, 26 tests passing`。
+- **第一批 #2 锁与原子 ID（Developer A 范围）**：`src/ctf_agent/runtime_lock.py`（fcntl.flock + 进程内可重入，challenge 级 `.runtime.lock`）；`util.next_log_id` 改为读取真实 metadata ID；`run_command/run_tty` 全程持锁；并发 LOG ID 无重复。
+- **第一批 #3/#4 状态 revision/合法转换 + 严格 evidence 引用（Developer B 范围）**：`state.yaml` 新增 `revision`，`save()` 带 CAS；合法转换表 + `force`（强制 reason+evidence）；`evidence.py` 解析 `LOG-*`/`E-*`/artifact（含 symlink 逃逸拒绝）。
+- **第一批 #5 original/work 路径保护（Developer D 范围）**：`policy.py` 路径包含、`original/` 保护、预算投影接口；runner 拒绝外部 input file。
+- **第一批 #6 process-group timeout（Developer A 范围）**：子进程独立进程组，timeout 后 SIGTERM → 宽限 → SIGKILL，日志记录终止信号；无残留子进程测试通过。
+- **第一批 #7 specialist merge 幂等（Developer C 范围）**：result schema v2、`source_hash`（文件内容派生/校验）、`reports/merged-results.jsonl` 历史、重复 merge 返回 `already_merged`、先校验后写入（无部分修改）。
+- **第一批 #8 并发/安全/回归测试**：`tests/test_runtime_lock.py`、`tests/test_concurrency.py`、`tests/test_security.py` 等新增 27 个测试，全套 53 通过。
+- **脱敏接入**：`redaction.py`（env/headers/内联 secret → 确定性 `[REDACTED:hash]`），runner 记录 command 前先脱敏。
+
+### 提交点（可回滚）
+
+```text
+a30bf84 baseline: ctf-agent v0.2.0, 26 tests passing
+00f9ad4 runtime: challenge lock, atomic log IDs, process-group timeout, output cap
+9925e89 state/evidence: revisions, legal transitions, strict evidence refs, locked mutations
+77bca20 merge: schema v2, source-hash idempotency, atomic validate-before-merge
+96b0c64 policy/security: path containment, original/ protection, budget interfaces, secret redaction in runner
+```
+
+### 未完成 / 残余风险（下一批）
+
+- **scope limits 运行时强制**（request_rate_per_second / max_requests / max_scan_ports / max_runtime_minutes 全链路 usage commit）只完成了接口（`policy.ensure_within_limits`）与 runner 的 `max_output_bytes` 执行；HTTP/nmap/flag 适配器的逐请求/端口/运行时预算记账留待 Phase 2。
+- **Developer E（HTTP Session，Phase 4）未开始**：Cookie jar、会话重放、响应 header 脱敏入库等仍为既有单请求行为。
+- **HTTP 响应 Set-Cookie/Authorization 脱敏入库** 在 HTTP adapter 层尚未接入（先由 E/Phase 4 统一做）。
+- 覆盖率从 66% 提升有限（总体仍低于 DoD 80%，`cli.py`/ghidra adapter 是主要缺口）；`fail_under` 暂为 60，需在后续批次随测试补强上调。
+- 质量门槛中的“超额预算无法执行”DoD 项依赖上述 scope limits 记账落地。

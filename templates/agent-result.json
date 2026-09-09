@@ -1,7 +1,9 @@
 {
-  "schema_version": 1,
-  "agent": "ctf-web",
-  "status": "COMPLETE",
+  "schema_version": 2,
+  "result_id": "RES-<unique-specialist-result-id>",
+  "source_hash": "",
+  "agent": "ctf-agent-web",
+  "status": "PARTIAL",
   "objective": "Describe the specialist objective",
   "facts": [
     {
@@ -16,7 +18,8 @@
       "statement": "Possible explanation requiring a test",
       "confidence": "MEDIUM",
       "test": "Minimal test",
-      "expected": "Expected observable difference"
+      "expected": "Expected observable difference",
+      "evidence": []
     }
   ],
   "failed_techniques": [

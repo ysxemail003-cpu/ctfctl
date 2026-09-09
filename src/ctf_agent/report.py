@@ -221,7 +221,7 @@ def _normalize_result(
 
     actual_hash = sha256_file(result_path)
     declared_hash = raw.get("source_hash")
-    if declared_hash is not None:
+    if declared_hash:
         _require(
             declared_hash == actual_hash,
             "source_hash does not match the result file content",

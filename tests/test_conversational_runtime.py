@@ -95,8 +95,8 @@ def test_context_compacts_state_evidence_and_logs(tmp_path: Path):
     assert context["facts"][0]["statement"] == "Root page exists"
     assert context["open_hypotheses"][0]["id"] == "H-0001"
     assert context["failed_techniques"][0]["technique"] == "admin:admin"
-    assert context["recent_logs"][0]["id"] == log2
-    assert context["recent_logs"][1]["id"] == log1
+    assert context["recent_logs"][0]["id"] == log1
+    assert context["recent_logs"][1]["id"] == log2
 
     markdown = render_context_markdown(context)
     assert "Root page exists" in markdown

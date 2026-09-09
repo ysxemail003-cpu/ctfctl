@@ -3,6 +3,12 @@
 A lightweight, auditable runtime for authorized CTF and lab work on Kali Linux. It gives Claude Code and Codex a shared contract for challenge directories, command logging, durable state, specialist handoffs, and flag verification.
 
 > Use only on systems and challenges you are explicitly authorized to test. Event rules always override this repository.
+>
+> Positioning: this is not a prompt-pack for one-off solves — it is an auditable
+> runtime for building and fielding your own **AI CTF experts** (autonomous solve
+> loop, structured Kali-tool adapters, reproducible benchmark, platform bridge,
+> trajectory export). Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+> (process layer) + [`docs/SOLVER_ARCHITECTURE.md`](docs/SOLVER_ARCHITECTURE.md) (capability layer).
 
 ## Install
 
@@ -215,15 +221,22 @@ Phase 2 turns the runtime into an efficient, high-capability autonomous CTF solv
 structured Kali-tool adapters, a solve loop, a reproducible capability benchmark,
 CTFd/platform bridge, trajectory export, parallel racing, sandboxed execution, and a
 cross-challenge knowledge ledger. The implementation contract is in
-[`docs/CAPABILITY_PLAN.md`](docs/CAPABILITY_PLAN.md). A third-party positioning and
-open-source review is in [`docs/OPENSOURCE_REVIEW.md`](docs/OPENSOURCE_REVIEW.md).
+[`docs/CAPABILITY_PLAN.md`](docs/CAPABILITY_PLAN.md); the shipped capability layer is
+documented in [`docs/SOLVER_ARCHITECTURE.md`](docs/SOLVER_ARCHITECTURE.md). A third-party
+positioning and open-source review is in [`docs/OPENSOURCE_REVIEW.md`](docs/OPENSOURCE_REVIEW.md).
 
 ## Development
 
 ```bash
 make test
-make bench   # capability benchmark on the self-contained synthetic suite
+make bench        # capability benchmark on the self-contained synthetic suite
+make demo         # end-to-end demo (no model API required)
+make scan-secrets # scan git history for high-signal secret patterns
 ```
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the contribution workflow and
+[`SECURITY.md`](SECURITY.md) for responsible disclosure.
+
 
 ## Design goals
 

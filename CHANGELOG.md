@@ -2,6 +2,24 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.1] - 2026-09-09 (optimization batch 4)
+
+### Added
+- Task leases (`ctf_agent/tasks.py`, Phase 3 Task C): `start_task` /
+  `heartbeat` / `take_over` / `release_task` stored in `state.yaml#active_tasks`
+  with `lease_until`; live leases cannot be taken over; every change is an event.
+- Evidence-safe log archival (`ctf_agent/logarchive.py`): `logs summary` and
+  `logs archive [--dry-run]` CLI; only logs unreferenced by state, evidence,
+  flags, and events are moved to `logs/archive/<date>/`; the query index is
+  rebuilt after archiving.
+- Projection de-duplication: `STATE.md`/`EVIDENCE.md` renders skip rewriting
+  when the generated content is unchanged (`util.write_if_changed`).
+- Coverage regressions: task leases, log archival, runner non-quiet/cache-skip
+  output, ELF missing/relative/non-ELF recon, render-skip.
+
+### Changed
+- `default_state()` now seeds `active_tasks: []` (additive schema v1 key).
+
 ## [0.4.0] - 2026-09-09 (optimization batch 3: Phase 5)
 
 ### Added

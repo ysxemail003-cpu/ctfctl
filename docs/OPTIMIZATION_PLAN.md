@@ -737,3 +737,26 @@ a30bf84 baseline: ctf-agent v0.2.0, 26 tests passing
 - **Phase 5 #5 日志归档/清理策略**：未实现——移动/删除 `logs/*.json` 会破坏 evidence 引用解析与重放；如需要应先引入“归档目录 + 解析器递归/索引映射”再实施。
 - 核心模块覆盖率（runner 62%、challenge 66%、elf 74%）仍低于 90% 建议值；ghidra 成功路径依赖本机安装（本机已装，回归较慢 ~18s）。
 - Phase 3 Task C 任务租约仍未实施（“如需要”项）。
+
+## 15. 实施状态记录（第四批，2026-09-09）
+
+> 第四批完成 Phase 3 Task C（任务租约）、Phase 5 #4（projection 渲染去重）、Phase 5 #5（evidence-safe 日志归档）与核心覆盖率补强。
+
+### 已完成
+
+- **Phase 3 Task C 任务租约**：`tasks.py` 的 `start_task/heartbeat/take_over/release_task`；`state.yaml#active_tasks`（schema v1 增量字段 `active_tasks: []`）；`lease_until` 到期前禁止 takeover；全部变更写入 events。
+- **Phase 5 #4 减少重复 projection 渲染**：`util.write_if_changed()`；`STATE.md`/`EVIDENCE.md` 内容未变时跳过原子写（回归测试用 mtime 断言）。
+- **Phase 5 #5 日志归档/清理策略（evidence-safe）**：`logarchive.py` 只归档未被 facts/hypotheses/techniques/flag/evidence 账本/events 引用的 `LOG-*`；移动至 `logs/archive/<YYYY-MM-DD>/` 并重建 `logs/index.json`；CLI `logs summary|archive [--dry-run]`。
+- **覆盖率补强**：98 测试通过；总体 83%（`fail_under=80` 保持）；核心模块显著提升：runner 62→83%、challenge→89%、elf→79%、state 88%、flag 85%、tasks 85%、logarchive 81%。
+
+### 提交点
+
+```text
+<见 git log：batch-4 提交为 tasks/logarchive/render-skip/0.4.1 等>
+```
+
+### 未完成 / 残余风险
+
+- 核心模块 90% 建议值尚未全部达到（evidence 81%、logindex 85%、report 89%、scope 74%、ghidra 60% 依赖本机安装）。
+- 归档策略只处理“未被引用”的日志；若未来允许归档被引用日志，需要让 evidence 解析器与 session 重放支持归档目录/索引映射。
+- Phase 5 性能目标在超大日志（>10k）下已验证缓存查询；归档/索引增量维护的上限未做压力测试。

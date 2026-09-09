@@ -77,6 +77,8 @@ stale result.
 | `.scope.yaml` | Authorization and targets | `ctfctl scope` |
 | `logs/*.json` | Command metadata (canonical) | `ctfctl run` / adapters |
 | `logs/index.json` | Derived query index (rebuildable) | runtime |
+| `logs/archive/<date>/` | Archived unreferenced logs | `ctfctl logs archive` |
+| `state.yaml#active_tasks` | Task leases (RUNNING/lease_until) | `tasks.py` |
 | `.runtime.lock` | Challenge mutation lock (`fcntl.flock`, reentrant) | runtime |
 | `state.yaml#revision` | Revision counter for CAS saves | runtime |
 | `reports/merged-results.jsonl` | Idempotent specialist merge history | `ctfctl merge-result` |

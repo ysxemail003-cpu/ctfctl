@@ -712,3 +712,28 @@ a30bf84 baseline: ctf-agent v0.2.0, 26 tests passing
 - **Phase 5**（logs/index.json 或 SQLite、CLI 拆分、TypedDict 重构、归档与基准）未开始。
 - 覆盖率 70% 仍低于 DoD 80%（cli.py 47%、ghidra adapter、recon/elf adapter 为缺口）。
 - `concurrent_commands` 限制未独立记账（challenge 锁已将单 challenge 命令串行化，跨 challenge 由各自 scope 独立约束）。
+
+## 14. 实施状态记录（第三批，2026-09-09）
+
+> 第三批完成 Phase 5 主体：logs 查询索引、TypedDict 记录、CLI 拆分为命令模块、覆盖率补强至 DoD 80%。
+
+### 已完成
+
+- **Phase 5 #1 logs/index.json**：`logindex.py` 派生索引（id + command_hash 两级映射），runner cache 查询不再全量扫描；缺失/过期/损坏自动从规范 `logs/*.json` 重建；10,000 条日志下缓存查询正确且快速（回归测试）。
+- **Phase 5 #3 TypedDict**：`records.py` 提供 CommandMetadata/EvidenceRecord/AgentResult/LogIndexEntry（functional TypedDict，total=False 兼容旧记录）；`EvidenceLedger.add()` 标注 `EvidenceRecord`。
+- **Phase 5 #2 CLI 拆分**：handler 按域拆入 `src/ctf_agent/commands/`（admin/challenge_cmds/scope/run/tool/state/evidence/flag/report + common）；`cli.py` 由 793 → ~300 行，保留解析器与分派；全部 88 测试通过，行为不变。
+- **Phase 5 #6 基准回归**：`test_logindex.py::test_ten_thousand_logs_cache_lookup_is_fast`（10k 元数据构建 + 三次查询计时断言）。
+- **覆盖率补强**：runner 错误路径、challenge 选择器/指针边界、recon/ghidra adapter、全 CLI 命令组集成测试；总体覆盖率 70% → **83%**，`fail_under` 提升至 80（DoD 达成）。
+
+### 提交点
+
+```text
+<见 git log：batch-3 提交为 logindex / cli-split / records+coverage 等>
+```
+
+### 未完成 / 残余风险
+
+- **Phase 5 #4 减少重复 projection 渲染**：save() 每次重渲染 STATE.md/EVIDENCE.md；大状态下的增量渲染未优化（日志量主导的场景收益有限）。
+- **Phase 5 #5 日志归档/清理策略**：未实现——移动/删除 `logs/*.json` 会破坏 evidence 引用解析与重放；如需要应先引入“归档目录 + 解析器递归/索引映射”再实施。
+- 核心模块覆盖率（runner 62%、challenge 66%、elf 74%）仍低于 90% 建议值；ghidra 成功路径依赖本机安装（本机已装，回归较慢 ~18s）。
+- Phase 3 Task C 任务租约仍未实施（“如需要”项）。

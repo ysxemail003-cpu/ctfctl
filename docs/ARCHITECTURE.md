@@ -75,7 +75,8 @@ stale result.
 | `EVIDENCE.md` | Human-readable evidence ledger | Generated |
 | `workspace/current.yaml` | Durable current-challenge pointer | `ctfctl use` / `ctfctl init` |
 | `.scope.yaml` | Authorization and targets | `ctfctl scope` |
-| `logs/*.json` | Command metadata | `ctfctl run` / adapters |
+| `logs/*.json` | Command metadata (canonical) | `ctfctl run` / adapters |
+| `logs/index.json` | Derived query index (rebuildable) | runtime |
 | `.runtime.lock` | Challenge mutation lock (`fcntl.flock`, reentrant) | runtime |
 | `state.yaml#revision` | Revision counter for CAS saves | runtime |
 | `reports/merged-results.jsonl` | Idempotent specialist merge history | `ctfctl merge-result` |

@@ -2,6 +2,25 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.0] - 2026-09-09 (optimization batch 3: Phase 5)
+
+### Added
+- `logs/index.json` derived query index (log-id and command-hash lookups). Cache
+  lookups no longer scan every metadata file; a missing/stale/corrupt index is
+  rebuilt from canonical `logs/*.json`.
+- Typed records (`src/ctf_agent/records.py`): `CommandMetadata`, `EvidenceRecord`,
+  `AgentResult`, `LogIndexEntry` (functional TypedDicts, `total=False` for
+  backward compatibility); `EvidenceLedger.add()` is annotated with `EvidenceRecord`.
+- CLI split into per-domain command modules under `ctf_agent/commands/`
+  (cli.py shrank from 793 to ~300 lines; parser + dispatch remain in `cli.py`).
+- Regression/coverage tests: runner error paths, challenge selector/pointer edge
+  cases, recon/ghidra adapters, CLI integration across all command groups.
+- Coverage gate raised to the DoD target of 80% overall.
+
+### Changed
+- `run_command`/`run_tty` maintain `logs/index.json` incrementally.
+- `context` rendering ignores `logs/index.json` (it is not a command record).
+
 ## [0.3.0] - 2026-09-09 (optimization batches 1-2)
 
 ### Added (batch 1: runtime/state/merge/security)

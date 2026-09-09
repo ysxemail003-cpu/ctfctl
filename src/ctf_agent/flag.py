@@ -287,6 +287,7 @@ def submit(
     token = os.environ.get(token_env)
     if not token:
         raise FlagError(f"Missing submission token in environment variable {token_env}")
+    scope_store.commit_usage({"requests": 1})
     payload = json.dumps({"challenge_id": challenge_id, "submission": value}).encode("utf-8")
     request = Request(
         url,

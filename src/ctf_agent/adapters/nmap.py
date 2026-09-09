@@ -30,6 +30,7 @@ def scan(
     scope = ScopeStore(challenge_dir)
     for port in ports:
         scope.check(target, port)
+    scope.commit_usage({"scan_ports": len(set(ports))})
 
     output_dir = challenge_dir / "artifacts" / "nmap"
     output_dir.mkdir(parents=True, exist_ok=True)

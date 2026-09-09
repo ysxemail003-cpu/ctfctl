@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import shlex
@@ -249,6 +250,10 @@ def run_command(
             stdin_data = input_file.read_bytes()
 
         max_output_bytes = _max_output_bytes(challenge_dir)
+        try:
+            scope.check_usage()
+        except CTFError as exc:
+            raise CTFError(f"Execution budget exhausted; refusing to run: {exc}") from exc
         started = utcnow()
         timed_out = False
         terminated: str | None = None
@@ -330,7 +335,14 @@ def run_command(
             "stdout_sha256": sha256_bytes(stdout),
             "stderr_sha256": sha256_bytes(stderr),
             "scope_check": scope_result,
+            "budget_error": None,
         }
+        try:
+            scope.commit_usage(
+                {"runtime_seconds": max(1, math.ceil(metadata["duration_ms"] / 1000))}
+            )
+        except CTFError as exc:
+            metadata["budget_error"] = str(exc)
         atomic_write_text(metadata_path, json.dumps(metadata, ensure_ascii=False, indent=2) + "\n")
         state.event(
             "command_executed",
@@ -407,6 +419,10 @@ def run_tty(
         metadata_path = log_dir / f"{base}.json"
 
         wrapped = ["script", "-qef", str(transcript), "-c", shlex.join(command)]
+        try:
+            scope.check_usage()
+        except CTFError as exc:
+            raise CTFError(f"Execution budget exhausted; refusing to run: {exc}") from exc
         started = utcnow()
         timed_out = False
         terminated: str | None = None
@@ -456,7 +472,14 @@ def run_tty(
             ),
             "transcript_size": stdout_size,
             "scope_check": scope_result,
+            "budget_error": None,
         }
+        try:
+            scope.commit_usage(
+                {"runtime_seconds": max(1, math.ceil(metadata["duration_ms"] / 1000))}
+            )
+        except CTFError as exc:
+            metadata["budget_error"] = str(exc)
         atomic_write_text(
             metadata_path,
             json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlsplit
 
 from .errors import ScopeError
+from .policy import ensure_within_limits
+from .runtime_lock import challenge_lock
 from .util import atomic_write_yaml, read_yaml, utcnow
 
 NETWORK_TOOLS = {
@@ -37,6 +41,15 @@ NETWORK_TOOLS = {
 }
 
 
+USAGE_DEFAULTS: dict[str, Any] = {
+    "requests": 0,
+    "scan_ports": 0,
+    "runtime_seconds": 0,
+    "concurrent_commands": 0,
+    "last_request_at": None,
+}
+
+
 def default_scope(mode: str) -> dict:
     return {
         "schema_version": 1,
@@ -53,11 +66,13 @@ def default_scope(mode: str) -> dict:
         },
         "targets": [],
         "limits": {
-            "request_rate_per_second": 10,
-            "max_requests": 2000,
+            "request_rate_per_second": 1000,
+            "max_requests": 10000,
             "max_scan_ports": 1000,
             "max_runtime_minutes": 45,
+            "max_output_bytes": 5_000_000,
         },
+        "usage": dict(USAGE_DEFAULTS),
         "prohibited": [
             "attack outside challenge scope",
             "attack CTF platform infrastructure",
@@ -171,6 +186,57 @@ class ScopeStore:
             data["authorization"]["notes"] = notes
         self.save(data)
         return data
+
+    def usage(self) -> dict[str, Any]:
+        data = self.load()
+        usage = dict(USAGE_DEFAULTS)
+        usage.update(data.get("usage") or {})
+        return usage
+
+    def check_usage(self, deltas: dict[str, int] | None = None) -> dict[str, Any]:
+        """Validate projected usage against limits without persisting."""
+        data = self.load()
+        usage = self.usage()
+        projected = ensure_within_limits(data.get("limits") or {}, usage, deltas)
+        return projected
+
+    def commit_usage(self, deltas: dict[str, int] | None = None) -> dict[str, Any]:
+        """Atomically reserve/commit usage deltas, enforcing limits and rate.
+
+        Runs under the challenge runtime lock so concurrent network operations
+        cannot overspend a budget. Raises :class:`~ctf_agent.errors.ScopeError`
+        for rate-limit violations and
+        :class:`~ctf_agent.policy.PolicyError` for budget violations.
+        """
+        deltas = deltas or {}
+        with challenge_lock(self.challenge_dir, description="scope.commit_usage"):
+            data = self.load()
+            usage = dict(USAGE_DEFAULTS)
+            usage.update(data.get("usage") or {})
+            if int(deltas.get("requests") or 0) > 0:
+                self._check_request_rate(data.get("limits") or {}, usage)
+            projected = ensure_within_limits(data.get("limits") or {}, usage, deltas)
+            now = time.time()
+            new_usage: dict[str, Any] = dict(projected)
+            new_usage["last_request_at"] = (
+                now if int(deltas.get("requests") or 0) > 0 else usage.get("last_request_at")
+            )
+            data["usage"] = new_usage
+            self.save(data)
+        return projected
+
+    @staticmethod
+    def _check_request_rate(limits: dict, usage: dict) -> None:
+        rate = int(limits.get("request_rate_per_second") or 0)
+        last = usage.get("last_request_at")
+        if rate <= 0 or not last:
+            return
+        elapsed = time.time() - float(last)
+        if elapsed < 1.0 / rate:
+            retry = max(0.0, 1.0 / rate - elapsed)
+            raise ScopeError(
+                f"Request rate limit of {rate}/s exceeded; retry in {retry:.2f}s"
+            )
 
 
 def _nmap_ports(spec: str) -> list[int]:

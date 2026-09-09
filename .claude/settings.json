@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./tools/ctfctl *)",
+      "Bash(ctfctl *)",
+      "Read(**)",
+      "Edit(workspace/**)",
+      "Edit(agent-specs/**)",
+      "Edit(src/**)",
+      "Edit(tests/**)"
+    ],
+    "deny": [
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(nmap *)",
+      "Bash(ffuf *)",
+      "Bash(gobuster *)",
+      "Bash(nc *)",
+      "Bash(ncat *)",
+      "Bash(sqlmap *)",
+      "Read(**/.env)",
+      "Read(**/id_rsa)"
+    ]
+  }
+}

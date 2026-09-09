@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+.venv/
+workspace/contests/*/*/original/*
+workspace/contests/*/*/work/*
+workspace/contests/*/*/logs/*
+workspace/contests/*/*/artifacts/*
+workspace/contests/*/*/flags/*
+workspace/contests/*/*/reports/*
+!**/.gitkeep
+workspace/contests/
+
+workspace/current.yaml
+
+# core dumps
+core.*
+*.core

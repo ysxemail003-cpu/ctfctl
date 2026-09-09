@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "agent": "ctf-web",
+  "status": "COMPLETE",
+  "objective": "Describe the specialist objective",
+  "facts": [
+    {
+      "statement": "Directly observed fact",
+      "evidence": ["LOG-000001"],
+      "confidence": "HIGH",
+      "classification": "FACT"
+    }
+  ],
+  "hypotheses": [
+    {
+      "statement": "Possible explanation requiring a test",
+      "confidence": "MEDIUM",
+      "test": "Minimal test",
+      "expected": "Expected observable difference"
+    }
+  ],
+  "failed_techniques": [
+    {
+      "technique": "Attempted technique",
+      "classification": "PAYLOAD_REJECTED",
+      "evidence": ["LOG-000002"]
+    }
+  ],
+  "artifacts": ["artifacts/http/000001-get-root.body"],
+  "recommended_next_action": "Concrete next action",
+  "risk": "LOW",
+  "confidence": "MEDIUM"
+}

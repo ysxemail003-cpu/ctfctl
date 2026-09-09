@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ctf-agent"
+version = "0.2.0"
+description = "Evidence-first AI CTF agent runtime for Kali Linux"
+requires-python = ">=3.11"
+dependencies = ["PyYAML>=6.0"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7",
+    "pytest-cov>=4",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "build>=1",
+]
+
+[project.scripts]
+ctfctl = "ctf_agent.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["ctf_agent"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+# Phase 0 baseline is 66% overall. Raise toward the 80% DoD gate as the
+# concurrency/security regression tests in this optimization land.
+fail_under = 60
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# Conservative, high-signal rules for the baseline; expand later.
+select = ["E4", "E7", "E9", "F", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/ctf_agent"]
+ignore_missing_imports = true
+no_implicit_optional = true
+warn_unused_ignores = false

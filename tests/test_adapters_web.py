@@ -15,6 +15,12 @@ from ctf_agent.errors import CTFError, ScopeError
 from ctf_agent.runner import run_command
 
 
+@pytest.fixture(autouse=True)
+def _fake_tool_availability(monkeypatch):
+    """CI has no ffuf/sqlmap; pretend they exist so validation/scope paths run."""
+    monkeypatch.setattr(web_adapter.shutil, "which", lambda name: f"/usr/bin/{name}")
+
+
 class _QuietHandler(http.server.BaseHTTPRequestHandler):
     hits: set = set()
 

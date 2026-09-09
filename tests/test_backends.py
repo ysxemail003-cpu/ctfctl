@@ -58,6 +58,9 @@ def test_cli_backend_complete_missing_tool(tmp_path, monkeypatch):
 
 
 def _fake_subprocess_factory(monkeypatch, codex_reply: str = "codex-reply", claude_reply: str = "claude-reply", rc: int = 0):
+    # Pretend every CLI is installed so availability checks pass without host tools.
+    monkeypatch.setattr(backends_module.shutil, "which", lambda name: f"/usr/bin/{name}")
+
     def fake_run(argv, **kwargs):
         if argv[0] == "codex":
             out_file = argv[argv.index("-o") + 1]

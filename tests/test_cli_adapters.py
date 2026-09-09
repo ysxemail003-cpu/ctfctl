@@ -116,3 +116,31 @@ def test_cli_pcap(tmp_path: Path, capsys):
     result = _run_json(challenge, capsys, "tool", "pcap", str(source))
     assert result["packet_count"] == "1"
     assert result["protocols"]
+
+
+@pytest.mark.skipif(shutil.which("ROPgadget") is None, reason="ROPgadget not installed")
+def test_cli_rop(tmp_path: Path, capsys):
+    challenge = _init(tmp_path, "cli-rop")
+    result = _run_json(challenge, capsys, "tool", "rop", "/bin/true", "--only", "pop|ret", "--max-gadgets", "20")
+    assert result["gadget_count"] > 0
+    assert result["gadget_count"] <= 20
+    assert result["gadgets"][0]["address"] > 0
+
+
+@pytest.mark.skipif(shutil.which("readelf") is None, reason="readelf not installed")
+def test_cli_imports(tmp_path: Path, capsys):
+    challenge = _init(tmp_path, "cli-imports")
+    result = _run_json(challenge, capsys, "tool", "imports", "/bin/true")
+    assert result["import_count"] > 0
+    assert any(i["name"] == "__gmon_start__" for i in result["imports"])
+
+
+@pytest.mark.skipif(shutil.which("ffuf") is None, reason="ffuf not installed")
+def test_cli_ffuf_scope_gate(tmp_path: Path, capsys):
+    """Out-of-scope ffuf is refused by the CLI with a non-zero exit."""
+    challenge = _init(tmp_path, "cli-ffuf-scope")
+    wordlist = challenge / "work" / "words.txt"
+    wordlist.parent.mkdir(parents=True, exist_ok=True)
+    wordlist.write_text("admin\n", encoding="utf-8")
+    rc = main(["-C", str(challenge), "tool", "ffuf", "http://127.0.0.1:1/FUZZ", "--wordlist", str(wordlist)])
+    assert rc != 0

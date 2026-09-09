@@ -22,6 +22,10 @@ Rows marked `ctfctl tool X` return a stable JSON summary and are logged/hashed/b
 | `7z` archive listing | `ctfctl tool archive` | forensics | read-only |
 | `zsteg` stego detection | `ctfctl tool zsteg` | forensics | tool crash reported as status=error |
 | `capinfos` + `tshark` pcap summary | `ctfctl tool pcap` | forensics | |
+| `ffuf` fuzzing | `ctfctl tool ffuf` | web | FUZZ position required; requests budgeted before run |
+| `sqlmap` read-only audit | `ctfctl tool sqlmap` | web | evidence-gated (`--evidence`/`--force`); level≤3 risk≤2 |
+| `ROPgadget` | `ctfctl tool rop` | pwn/rev | filtered by `--only`; capped gadget list |
+| `readelf --dyn-syms` imports | `ctfctl tool imports` | pwn/rev | UND symbols with versions |
 
 ## Universal file intake
 

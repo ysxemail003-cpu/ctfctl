@@ -2,7 +2,22 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] - capability phase (Batch 1a: Phase A1/A2 tool adapters)
+## [Unreleased] - capability phase (Batch 1b: Phase A3/A4 tool adapters)
+
+### Added
+- Web adapters (`ctf_agent/adapters/web.py`): `ctfctl tool ffuf` (scope-checked, FUZZ-position
+  required, wordlist mandatory, request budget committed *before* execution so over-budget runs
+  are refused) and `ctfctl tool sqlmap` (read-only argv builder with hard caps level≤3/risk≤2 and
+  no destructive flags; execution requires a resolvable `--evidence` reference unless `--force`).
+- Pwn/rev helpers (`ctf_agent/adapters/pwn.py`): `ctfctl tool rop` (structured ROPgadget gadgets,
+  `--only`/`--depth`/`--max-gadgets`) and `ctfctl tool imports` (readelf `--dyn-syms` UND imports).
+- 16 new adapter + CLI tests (sqlmap argv invariants, ffuf validation/scope/end-to-end on a local
+  HTTP server, ROP/imports parsing, evidence-gate behavior).
+
+### Tested
+- `make check`: ruff/mypy clean; overall coverage >= 80%; adapter modules >= 80%.
+
+
 
 ### Added
 - Crypto adapters (`ctf_agent/adapters/crypto.py`): `ctfctl tool hashid` (offline shape heuristic +

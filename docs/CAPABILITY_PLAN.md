@@ -631,7 +631,29 @@ Batch 1 完成前不启动 E（racing）、F（沙箱）、D 的自动领题，�
 - 残余风险：hashcat 成功路径默认不在 `make check` 内；binwalk 提取耗时用例约 3–5s；
   zsteg 对病态图片仍可能产生非零退出（已优雅上报）；A3/A4（ffuf/sqlmap/ROPgadget 等）未开始。
 
-### 批次 1b+（规划中）
+### 批次 1b（Phase A3/A4 工具适配器，2026-09-09）
+
+> 完成 Phase A3（web：ffuf/sqlmap）与 A4（pwn/rev：ROPgadget/readelf）适配器。Batch 1a 记录见上。
+
+- 新增 `ctf_agent/adapters/web.py`：`tool ffuf`（scope 校验 + FUZZ 位置必需 + wordlist 强制 +
+  **执行前**按词表行数预算 requests，超预算直接拒绝）；`tool sqlmap`（`build_sqlmap_argv` 纯函数
+  固化只读不变量：level≤3/risk≤2、无任何破坏性开关；执行需可解析 `--evidence`，除非 operator
+  显式 `--force`）。
+- 新增 `ctf_agent/adapters/pwn.py`：`tool rop`（ROPgadget 结构化 gadget，`--only/--depth/
+  --max-gadgets`）、`tool imports`（`readelf --dyn-syms` UND 符号，含版本解析）。
+- 测试：web/pwn 模块 + CLI 集成共 16 个新用例（sqlmap argv 不变量、ffuf 校验/scope 拒绝/本地
+  HTTP 端到端、ROP/imports 解析、evidence 门禁）。
+- 提交点：`<见 git log：Phase A3/A4 提交>`。
+- 残余风险：sqlmap 真实执行路径未纳入默认测试（需注入靶标，成本高；由 argv 不变量 + evidence
+  门禁 + stub 摘要测试守护，真实靶场验证留待 Phase B/C 端到端）；ffuf 请求数为执行前估算
+  （= 词表行数 × FUZZ 位），与真实发送数可能略有出入，属诚实上界。
+- 至此 Phase A 全部完成（A1–A4）。
+
+### 批次 1c（规划中）
+
+- Phase B 求解循环骨架（`backends.py` + `solver.py`）→ Phase C 合成题集 + `ctfctl bench`。
+
+
 
 - Phase A3/A4（web/pwn 辅助 adapter）→ Phase B 求解循环骨架 → Phase C 合成题集 + `ctfctl bench`。
 

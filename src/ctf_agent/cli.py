@@ -208,6 +208,38 @@ def build_parser() -> argparse.ArgumentParser:
     pcap_tool.add_argument("path", type=Path)
     pcap_tool.add_argument("--timeout", type=float, default=120.0)
 
+    ffuf_tool = tool_sub.add_parser("ffuf", help="Scoped ffuf fuzz; URL (or --data) must contain FUZZ")
+    add_challenge_dir(ffuf_tool)
+    ffuf_tool.add_argument("url")
+    ffuf_tool.add_argument("--wordlist", required=True, help="Wordlist (absolute or challenge-relative)")
+    ffuf_tool.add_argument("--method", default="GET")
+    ffuf_tool.add_argument("--data", default=None, help="POST body; may contain FUZZ for parameter fuzzing")
+    ffuf_tool.add_argument("--match-codes", default="200,204,301,302,307,401,403")
+    ffuf_tool.add_argument("--rate", type=int, default=50, help="Requests/second cap (1-5000)")
+    ffuf_tool.add_argument("--timeout", type=float, default=120.0)
+
+    sqlmap_tool = tool_sub.add_parser("sqlmap", help="Read-only sqlmap audit; requires --evidence of injection unless --force")
+    add_challenge_dir(sqlmap_tool)
+    sqlmap_tool.add_argument("url")
+    sqlmap_tool.add_argument("--evidence", default=None, help="LOG-*/E-* reference to manual injection evidence")
+    sqlmap_tool.add_argument("--level", type=int, default=1, help="sqlmap --level (capped at 3)")
+    sqlmap_tool.add_argument("--risk", type=int, default=1, help="sqlmap --risk (capped at 2)")
+    sqlmap_tool.add_argument("--force", action="store_true", help="Skip the evidence gate (operator decision)")
+    sqlmap_tool.add_argument("--timeout", type=float, default=600.0)
+
+    rop_tool = tool_sub.add_parser("rop", help="List ROP gadgets via ROPgadget (read-only)")
+    add_challenge_dir(rop_tool)
+    rop_tool.add_argument("binary", type=Path)
+    rop_tool.add_argument("--only", default=None, help="ROPgadget --only filter, e.g. 'pop|ret'")
+    rop_tool.add_argument("--depth", type=int, default=8)
+    rop_tool.add_argument("--max-gadgets", type=int, default=300)
+    rop_tool.add_argument("--timeout", type=float, default=120.0)
+
+    imports_tool = tool_sub.add_parser("imports", help="List dynamic imports via readelf --dyn-syms")
+    add_challenge_dir(imports_tool)
+    imports_tool.add_argument("binary", type=Path)
+    imports_tool.add_argument("--timeout", type=float, default=60.0)
+
     # state
     state = subparsers.add_parser("state", help="Inspect or update canonical state")
     add_challenge_dir(state)

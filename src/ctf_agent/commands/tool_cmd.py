@@ -1,4 +1,4 @@
-"""tool adapter commands (http, http-session, nmap, web-inventory, file, elf, ghidra, crypto, forensics)."""
+"""tool adapter commands (http/session/nmap/web-inventory/file/elf/ghidra/crypto/forensics/web/pwn)."""
 from __future__ import annotations
 
 from ..adapters import crypto as crypto_adapter
@@ -7,7 +7,9 @@ from ..adapters import forensics as forensics_adapter
 from ..adapters import ghidra as ghidra_adapter
 from ..adapters import http as http_adapter
 from ..adapters import nmap as nmap_adapter
+from ..adapters import pwn as pwn_adapter
 from ..adapters import recon as recon_adapter
+from ..adapters import web as web_adapter
 from ..challenge import find_challenge_dir
 from ..errors import CTFError
 from .common import challenge_dir_arg, json_print, parse_header
@@ -89,6 +91,48 @@ def _handle_tool(args) -> int:
         return 0
     if args.tool_command == "pcap":
         json_print(forensics_adapter.pcap_summary(challenge_dir, args.path, args.timeout))
+        return 0
+    if args.tool_command == "ffuf":
+        json_print(
+            web_adapter.ffuf_scan(
+                challenge_dir,
+                args.url,
+                args.wordlist,
+                method=args.method,
+                data=args.data,
+                match_codes=args.match_codes,
+                rate=args.rate,
+                timeout=args.timeout,
+            )
+        )
+        return 0
+    if args.tool_command == "sqlmap":
+        json_print(
+            web_adapter.sqlmap_audit(
+                challenge_dir,
+                args.url,
+                evidence_ref=args.evidence,
+                level=args.level,
+                risk=args.risk,
+                timeout=args.timeout,
+                force=args.force,
+            )
+        )
+        return 0
+    if args.tool_command == "rop":
+        json_print(
+            pwn_adapter.rop_gadgets(
+                challenge_dir,
+                args.binary,
+                only=args.only,
+                depth=args.depth,
+                max_gadgets=args.max_gadgets,
+                timeout=args.timeout,
+            )
+        )
+        return 0
+    if args.tool_command == "imports":
+        json_print(pwn_adapter.dyn_imports(challenge_dir, args.binary, args.timeout))
         return 0
     raise CTFError(f"Unhandled command: {args.root_command}")
 

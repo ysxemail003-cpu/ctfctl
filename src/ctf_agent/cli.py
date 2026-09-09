@@ -360,6 +360,14 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--out", type=Path, default=None, help="Results root (default: bench/results)")
     bench.add_argument("--only", default=None, help="Run a single challenge id")
     bench.add_argument("--timeout", type=float, default=180.0, help="Per-challenge driver timeout")
+    bench.add_argument(
+        "--driver",
+        choices=["script", "solver"],
+        default="script",
+        help="script = bundled solve.py; solver = solve-loop engine (needs a model backend)",
+    )
+    bench.add_argument("--backend", choices=["auto", "codex", "claude", "gemini"], default="auto")
+    bench.add_argument("--max-rounds", type=int, default=8)
 
     # solve loop
     solve = subparsers.add_parser("solve", help="Run the autonomous solve loop against the current challenge")

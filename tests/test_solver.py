@@ -143,3 +143,10 @@ def test_solve_records_events(tmp_path: Path):
 def test_run_solve_requires_challenge(tmp_path: Path):
     with pytest.raises(CTFError):
         solver_module.run_solve(tmp_path / "missing", policy=solver_module.ScriptedPolicy([]))
+
+
+def test_compose_round_prompt_includes_extra_context(tmp_path: Path):
+    challenge = _challenge(tmp_path, "solve-extra")
+    prompt = solver_module.compose_round_prompt(challenge, 1, 3, [], extra_context="Target URL: http://127.0.0.1:9/")
+    assert "EXTRA CONTEXT" in prompt
+    assert "Target URL: http://127.0.0.1:9/" in prompt

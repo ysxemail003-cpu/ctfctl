@@ -687,10 +687,26 @@ Batch 1 完成前不启动 E（racing）、F（沙箱）、D 的自动领题，�
   state 生命周期（SOLVED 由既有 flag verify/submit 流程接管）；PLAN 步骤为“每轮 prompt 内联”
   而非独立 plan.md 文件；bench 的 `--driver solver` 与 suite v2（每类 ≥2、含 medium）未开始。
 
-### 批次 1e（规划中）
+### 批次 1e（bench 接入 solver driver，2026-09-09）
 
-- bench 接入 solver driver（`--driver solver`，可跑真实 LLM 对照基线）→ suite v2 扩容 →
-  Phase D/E（平台桥+轨迹导出、并行竞速）。
+> Phase B 循环与 Phase C 基准打通：同一套合成题集现在既能跑确定性脚本，也能跑真实 LLM 求解。
+
+- `ctfctl bench --driver solver --backend auto|codex|claude|gemini`：逐题调用 `solver.run_solve`
+  （round 循环、actions 经 ctfctl 留痕），结果记录新增 `rounds`，SOLVED/STUCK 映射为
+  bench SOLVED/FAILED；模型 CLI 缺失在 CLI 层 fail-fast，harness 层无 backend/policy 记 SKIPPED。
+- `solver.run_solve`/`compose_round_prompt` 支持 `extra_context`（web 题把本地靶标 URL 注入每轮 prompt）。
+- 测试：4 个 bench solver-driver 用例（SOLVED/STUCK→FAILED/无后端 SKIPPED/suite 级 policy 全解）+
+  1 个 extra_context 用例。
+- 真实 LLM 基线（Baseline 2）**待 operator 显式执行**：`make bench` 之后跑
+  `./tools/ctfctl bench --driver solver --backend auto` 并登记 `bench/RESULTS.md`。
+- 提交点：`<见 git log：Phase B/C 打通提交>`。
+- 残余/待办：suite v2（每类 ≥2、含 medium）与 Phase D/E 未开始。
+
+### 批次 1f（规划中）
+
+- suite v2 扩容（每类 ≥2、含 medium）→ Phase D（平台桥 + trajectory 导出）→ Phase E（并行竞速）。
+
+
 
 
 

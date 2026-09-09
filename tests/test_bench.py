@@ -8,6 +8,7 @@ import pytest
 
 from ctf_agent import bench as bench_module
 from ctf_agent.errors import CTFError
+from ctf_agent.solver import ScriptedPolicy
 
 
 def _write_challenge(
@@ -149,3 +150,91 @@ def test_run_challenge_target_server(tmp_path: Path):
     result = bench_module.run_challenge(challenge, tmp_path / "out")
     assert result["status"] == "SOLVED"
     assert result["flag_matched"] is True
+
+
+
+XOR_FLAG = "flag{xor_file_rev}"
+XOR_CODE = (
+    "import pathlib;"
+    "d=pathlib.Path('original/secret.bin').read_bytes();"
+    "print(bytes(b^0x42 for b in d).decode())"
+)
+
+
+def _write_solver_challenge(root: Path, challenge_id: str = "xor-solver") -> Path:
+    suite = root / "suite"
+    challenge_dir = suite / "rev" / challenge_id
+    challenge_dir.mkdir(parents=True, exist_ok=True)
+    (challenge_dir / "original").mkdir(parents=True, exist_ok=True)
+    (challenge_dir / "original" / "secret.bin").write_bytes(bytes(b ^ 0x42 for b in XOR_FLAG.encode()))
+    manifest = {
+        "schema_version": 1,
+        "id": challenge_id,
+        "category": "rev",
+        "difficulty": "easy",
+        "title": challenge_id,
+        "description": "",
+        "flag": XOR_FLAG,
+        "driver": "solver",
+        "solve": "solve.py",
+        "requires": [],
+        "target": False,
+    }
+    (challenge_dir / "challenge.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (challenge_dir / "solve.py").write_text("print('FLAG=' + 'unused')\n", encoding="utf-8")
+    return suite
+
+
+def _xor_response(round_index: int, prompt: str) -> dict:
+    return {
+        "analysis": "undo single-byte xor",
+        "commands": [["run", "--tag", "xor", "--", "python3", "-c", XOR_CODE]],
+        "flag_candidate": None,
+        "conclusion": None,
+    }
+
+
+def test_run_challenge_solver_driver_solved(tmp_path: Path):
+    suite = _write_solver_challenge(tmp_path)
+    challenge = bench_module.discover_suite(suite)[0]
+    result = bench_module.run_challenge(
+        challenge, tmp_path / "out", driver="solver", policy=ScriptedPolicy(generator=_xor_response)
+    )
+    assert result["status"] == "SOLVED"
+    assert result["flag_matched"] is True
+    assert result["rounds"] == 1
+    assert result["actions"] >= 1
+
+
+def test_run_challenge_solver_driver_stuck_is_failed(tmp_path: Path):
+    suite = _write_solver_challenge(tmp_path, "xor-stuck")
+    challenge = bench_module.discover_suite(suite)[0]
+
+    def stuck(round_index: int, prompt: str) -> dict:
+        return {"analysis": "nothing", "commands": [], "flag_candidate": None, "conclusion": None}
+
+    result = bench_module.run_challenge(
+        challenge, tmp_path / "out", driver="solver", policy=ScriptedPolicy(generator=stuck), max_rounds=3
+    )
+    assert result["status"] == "FAILED"
+    assert result["reason"]
+
+
+def test_run_challenge_solver_driver_requires_backend_or_policy(tmp_path: Path):
+    suite = _write_solver_challenge(tmp_path, "xor-nobackend")
+    challenge = bench_module.discover_suite(suite)[0]
+    result = bench_module.run_challenge(challenge, tmp_path / "out", driver="solver")
+    assert result["status"] == "SKIPPED"
+    assert "solver driver requires" in (result.get("reason") or "")
+
+
+def test_run_suite_solver_driver_with_policy(tmp_path: Path):
+    suite = _write_solver_challenge(tmp_path, "xor-suite")
+    summary = bench_module.run_suite(
+        suite_dir=suite,
+        out_dir=tmp_path / "results",
+        driver="solver",
+        policy=ScriptedPolicy(generator=_xor_response),
+    )
+    assert summary["counts"]["SOLVED"] == 1
+    assert summary["counts"]["FAILED"] == 0

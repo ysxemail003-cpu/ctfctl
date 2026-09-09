@@ -16,6 +16,15 @@ Artifacts land in `bench/results/<date>/run-<time>/`:
 `summary.json` (full per-challenge records), `failure_modes.json`, `REPORT.md`,
 plus each challenge's isolated workspace (`work/...`) with its own logs/evidence.
 
+Live (LLM) solver baseline — run by the operator when a model CLI is available:
+
+```bash
+./tools/ctfctl bench --driver solver --backend auto
+```
+
+Results there include `rounds` per challenge. Record the outcome as the next
+baseline row below.
+
 ## Baseline 1 — 2026-09-09 (v0.4.1 + Phase A adapters; suite v1: 6× easy)
 
 Environment: Kali VM, Python 3.14, x86_64; john/hashid/binwalk/7z present.

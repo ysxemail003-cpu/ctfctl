@@ -171,9 +171,13 @@ def compose_round_prompt(
     round_index: int,
     max_rounds: int,
     history: list[dict[str, Any]],
+    extra_context: str | None = None,
 ) -> str:
     digest = _state_digest(challenge_dir)
     inventory = _file_inventory(challenge_dir)
+    extra_text = ""
+    if extra_context:
+        extra_text = f"EXTRA CONTEXT (from the benchmark/operator)\n{extra_context}\n"
     history_text = ""
     for item in history[-4:]:
         commands = [c.get("argv") for c in item.get("executed", [])]
@@ -191,7 +195,7 @@ CHALLENGE
 - objective/next action: {digest['next_action']}
 - inputs: {json.dumps(inventory, ensure_ascii=False)}
 
-RECORDED FACTS
+{extra_text}RECORDED FACTS
 {chr(10).join('- ' + f for f in digest['facts']) or '(none yet)'}
 
 HYPOTHESES
@@ -315,6 +319,7 @@ def run_solve(
     max_actions: int = 3,
     action_timeout: float = 120.0,
     model_timeout: float = 300.0,
+    extra_context: str | None = None,
     ctfctl_path: Path = DEFAULT_CTFCTL,
 ) -> SolveSummary:
     """Run the solve loop against one challenge workspace until solved or stuck."""
@@ -341,7 +346,7 @@ def run_solve(
     summary = SolveSummary(challenge=challenge_name, category=category, status="STUCK", reason=None, rounds=0, flag=None, round_dir=rounds_dir)
 
     for round_index in range(1, max_rounds + 1):
-        prompt = compose_round_prompt(challenge_dir, round_index, max_rounds, history)
+        prompt = compose_round_prompt(challenge_dir, round_index, max_rounds, history, extra_context=extra_context)
         try:
             response = policy.act(round_index, prompt)
         except Exception as exc:  # invalid model reply

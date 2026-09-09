@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import solver as solver_module
 from .adapters import ingest as ingest_adapter
 from .challenge import init_challenge
 from .errors import CTFError
@@ -162,6 +163,10 @@ def run_challenge(
     ctfctl_path: Path = DEFAULT_CTFCTL,
     timeout: float = 180.0,
     python: str | None = None,
+    driver: str | None = None,
+    backend: Any = None,
+    policy: Any = None,
+    max_rounds: int = 8,
 ) -> dict[str, Any]:
     """Run one synthetic challenge and return its result record."""
     missing = _missing_requires(challenge)
@@ -207,6 +212,59 @@ def run_challenge(
             sources = [p for p in sorted(original_dir.iterdir()) if p.is_file()]
             if sources:
                 ingest_adapter.import_files(challenge_dir, sources, perform_recon=False)
+
+        effective_driver = driver or challenge.driver
+        if effective_driver == "solver":
+            if policy is None and backend is None:
+                return {
+                    "id": challenge.id,
+                    "category": challenge.category,
+                    "difficulty": challenge.difficulty,
+                    "title": challenge.title,
+                    "status": "SKIPPED",
+                    "reason": "solver driver requires a model backend (or a policy in tests)",
+                    "flag_matched": False,
+                    "duration_s": round(time.monotonic() - started, 3),
+                    "actions": 0,
+                    "rounds": 0,
+                    "run_dir": str(challenge_dir.relative_to(out_dir)),
+                }
+            solve = solver_module.run_solve(
+                challenge_dir,
+                policy=policy,
+                backend=backend,
+                max_rounds=max_rounds,
+                action_timeout=timeout,
+                model_timeout=timeout,
+                extra_context=f"Target URL: {target_url}" if target_url else None,
+                ctfctl_path=ctfctl_path,
+            )
+            duration = round(time.monotonic() - started, 3)
+            if solve.status == "SOLVED" and solve.flag == challenge.flag:
+                status = "SOLVED"
+                reason = solve.reason
+                matched = True
+            elif solve.status == "SOLVED":
+                status = "FAILED"
+                reason = f"flag mismatch: got {solve.flag!r}"
+                matched = False
+            else:
+                status = "FAILED"
+                reason = solve.reason or "unsolved"
+                matched = False
+            return {
+                "id": challenge.id,
+                "category": challenge.category,
+                "difficulty": challenge.difficulty,
+                "title": challenge.title,
+                "status": status,
+                "reason": reason,
+                "flag_matched": matched,
+                "duration_s": duration,
+                "actions": _action_count(challenge_dir),
+                "rounds": solve.rounds,
+                "run_dir": str(challenge_dir.relative_to(out_dir)),
+            }
 
         solve_script = challenge.root / challenge.solve
         if not solve_script.is_file():
@@ -293,6 +351,10 @@ def run_suite(
     only: str | None = None,
     ctfctl_path: Path = DEFAULT_CTFCTL,
     timeout: float = 180.0,
+    driver: str | None = None,
+    backend: Any = None,
+    policy: Any = None,
+    max_rounds: int = 8,
 ) -> dict[str, Any]:
     """Run a whole benchmark suite and write summary/failure/report files."""
     suite_dir = Path(suite_dir).resolve()
@@ -309,7 +371,16 @@ def run_suite(
 
     results: list[dict[str, Any]] = []
     for challenge in challenges:
-        result = run_challenge(challenge, run_dir, ctfctl_path=ctfctl_path, timeout=timeout)
+        result = run_challenge(
+            challenge,
+            run_dir,
+            ctfctl_path=ctfctl_path,
+            timeout=timeout,
+            driver=driver,
+            backend=backend,
+            policy=policy,
+            max_rounds=max_rounds,
+        )
         results.append(result)
 
     summary: dict[str, Any] = {

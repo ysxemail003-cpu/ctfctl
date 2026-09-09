@@ -2,7 +2,17 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] - capability phase (Batch 1d: Phase B solver skeleton)
+## [Unreleased] - capability phase (Batch 1e: bench solver driver)
+
+### Added
+- `ctfctl bench --driver solver --backend auto` runs each challenge through the solve-loop
+  engine (Phase B) instead of the bundled `solve.py`; per-challenge results add `rounds` and map
+  SOLVED/STUCK to bench SOLVED/FAILED; unsupported model CLIs fail fast at CLI start.
+- Missing backend/policy inside the harness yields SKIPPED (harness-tolerant for tests).
+- `solver.run_solve`/`compose_round_prompt` accept `extra_context` (used to inject the local
+  target URL for web challenges into every round prompt).
+
+
 
 ### Added
 - Model backends (`ctf_agent/backends.py`): uniform `complete(prompt)` over codex (`codex exec -o`),

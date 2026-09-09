@@ -29,7 +29,8 @@ evidence-linked by the normal runtime.
 | `bench.py` | Synthetic-suite benchmark (script or solver driver, parallel) |
 | `platform.py` | CTF platform bridge (CTFd v1 client, `NormalizedChallenge`) |
 | `trajectory.py` | CSAW-style trajectory export (JSON + Markdown) |
-| `commands/{solve,bench,platform,trajectory}_cmd.py` | CLI handlers |
+| `knowledge.py` | Cross-challenge knowledge ledger + review |
+| `commands/{solve,bench,platform,trajectory,knowledge}_cmd.py` | CLI handlers |
 
 ## The solve loop (`ctfctl solve`)
 
@@ -161,3 +162,18 @@ already-redacted stored data is used; secrets are never re-printed.
    submit) and are wired in `commands/platform_cmd.py`.
 6. Every behavior change ships with a regression test; solving changes must
    re-run `make bench`.
+7. Knowledge entries are evidence-backed and never contain flags/answers
+   (`workspace/knowledge.jsonl` is scan-guarded in `knowledge stats`).
+
+
+## Knowledge ledger and review (`ctfctl knowledge`)
+
+Lessons learned on one challenge are stored per workspace
+(`workspace/knowledge.jsonl`) with category, technique, trigger, outcome, and
+resolvable evidence references. Solve-round prompts automatically inject the
+most relevant entries (same category, `successful` first), so agents stop
+repeating failed techniques. `ctfctl knowledge propose` turns recorded
+techniques into draft entries for an operator to commit; `ctfctl knowledge
+review` writes `reports/review-<name>.md` (timeline + techniques + waste
+points) after a solve. `ctfctl knowledge stats` reports counts and verifies the
+ledger contains no flag-like content.

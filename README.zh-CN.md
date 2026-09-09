@@ -48,7 +48,8 @@
 | 基准：12 道原创题（6 easy + 6 medium） | 已交付，脚本基线 12/12 | `bench/RESULTS.md` |
 | CTFd 平台桥 + 轨迹导出 | 已交付 | `docs/SOLVER_ARCHITECTURE.md` |
 | 并行竞速 + 线程/进程安全的运行时锁 | 已交付 | `docs/SOLVER_ARCHITECTURE.md` |
-| 记忆/知识账本、更难 suite v3 | 下一步 | `docs/CAPABILITY_PLAN.md` |
+| 知识账本 + 赛后复盘 | 已交付 | `docs/SOLVER_ARCHITECTURE.md` |
+| 更难 suite v3 | 下一步 | `docs/CAPABILITY_PLAN.md` |
 
 ## 快速开始
 
@@ -79,6 +80,9 @@ export CTF_CHALLENGE_DIR="$PWD/workspace/contests/2026-demo/web-login"
 ./tools/ctfctl bench                                 # 离线能力基准
 ./tools/ctfctl platform ctfd pull --url https://ctf.example --event EVENT
 ./tools/ctfctl trajectory export                     # CSAW 风格轨迹 JSON + MD
+./tools/ctfctl knowledge add -C <challenge> --category rev \
+    --technique "..." --trigger "..." --conclusion "..." \
+    --outcome successful --evidence LOG-000001
 ```
 
 `make demo` 会跑一遍完整的、不需要模型的演示：doctor → init → hashid/john →

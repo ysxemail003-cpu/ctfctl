@@ -410,6 +410,28 @@ def build_parser() -> argparse.ArgumentParser:
     race.add_argument("--action-timeout", type=float, default=120.0)
     race.add_argument("--model-timeout", type=float, default=300.0)
 
+    # knowledge ledger
+    knowledge = subparsers.add_parser("knowledge", help="Cross-challenge knowledge ledger and review (Phase G)")
+    knowledge_sub = knowledge.add_subparsers(dest="knowledge_command", required=True)
+    knowledge_add = knowledge_sub.add_parser("add", help="Add an evidence-backed lesson")
+    add_challenge_dir(knowledge_add)
+    knowledge_add.add_argument("--category", required=True)
+    knowledge_add.add_argument("--technique", required=True)
+    knowledge_add.add_argument("--trigger", required=True)
+    knowledge_add.add_argument("--conclusion", required=True)
+    knowledge_add.add_argument("--outcome", choices=["successful", "failed"], required=True)
+    knowledge_add.add_argument("--evidence", action="append", required=True, help="LOG-*/E-* reference; repeatable")
+    knowledge_list = knowledge_sub.add_parser("list", help="List ledger entries")
+    knowledge_list.add_argument("--workspace", default=None)
+    knowledge_list.add_argument("--category", default=None)
+    knowledge_list.add_argument("--outcome", choices=["successful", "failed"], default=None)
+    knowledge_propose = knowledge_sub.add_parser("propose", help="Propose entries from recorded challenge techniques")
+    knowledge_propose.add_argument("--workspace", default=None)
+    knowledge_review = knowledge_sub.add_parser("review", help="Generate a post-solve review markdown")
+    add_challenge_dir(knowledge_review)
+    knowledge_stats = knowledge_sub.add_parser("stats", help="Ledger statistics and flag-content scan")
+    knowledge_stats.add_argument("--workspace", default=None)
+
     # sync agents
     sync = subparsers.add_parser("sync-agents", help="Generate Claude Code and Codex agent files")
     sync.add_argument("--install-codex", action="store_true", help="Also install skills into ~/.codex/skills")

@@ -753,9 +753,27 @@ Batch 1 完成前不启动 E（racing）、F（沙箱）、D 的自动领题，�
 - 残余/待办：实时共享“总轮数预算”未做（每 worker rounds 上限近似）；E4 知识库读写为 Phase G
   事项（当前每 worker 独立只读）；真实多模型跑分待 operator。
 
-### 批次 1i（规划中）
+### 批次 1i（Phase G 知识账本 + 复盘，2026-09-09）
 
-- Phase G（记忆/复盘）或 Phase H（开源发布准备）——视主线优先级。
+> G1/G2/G3 完成：跨挑战知识账本、复盘生成、solver prompt 知识注入；repeat_failure 度量以
+> `knowledge stats` + bench 前后对照落实（待 operator 跑真实 LLM 基线后登记）。
+
+- `src/ctf_agent/knowledge.py` + `ctfctl knowledge add|list|propose|review|stats`：
+  `workspace/knowledge.jsonl`，条目 = {K-id, category, technique, trigger, conclusion, outcome,
+  evidence_refs, source_challenge}；**禁止 flag/答案**（add 拒绝 + stats 全库扫描）；写库必须
+  证据可解析；propose 从各挑战 state techniques（带 evidence 者）生成候选，人工确认后提交。
+- `ctfctl knowledge review` 生成 `reports/review-<name>.md`（事件时间线 + 成败技法 + 复盘指引）。
+- solver `compose_round_prompt` 自动注入同 category 知识（successful 优先），避免重复踩坑。
+- 测试：7 个（证据门槛/flag 拒绝/增列查/排序/propose/复盘/知识注入 prompt）。
+- 提交点：`<见 git log：Phase G 提交>`。
+- 残余/待办：repeat_failure_rate 在 bench 的前后对照需真实 solver 跑分；知识去重/过期策略未做；
+  Phase H 发布项已部分完成（v0.5.0 已打 tag：MIT、双语 README、demo、CONTRIBUTING/SECURITY）。
+
+### 批次 1j（规划中）
+
+- 剩余：suite v3（hard）+ 真实 LLM 基线（`--driver solver`/`race`）对照登记 + GitHub 推送。
+
+
 
 
 

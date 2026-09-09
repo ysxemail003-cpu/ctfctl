@@ -2,7 +2,22 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [0.5.0] - 2026-09-09 (capability layer: Phase A-E + open-source prep)
+## [Unreleased] - Phase G (knowledge ledger + review)
+
+### Added
+
+- Cross-challenge knowledge ledger (`ctf_agent/knowledge.py` + `ctfctl knowledge add|list|propose|review|stats`):
+  evidence-backed entries by category/technique/trigger/outcome stored in
+  `workspace/knowledge.jsonl`. Entries never store flags/answers (rejected on add and
+  scan-guarded in stats); every entry requires resolvable LOG-*/E-* references.
+- `ctfctl knowledge propose` scans recorded challenge techniques and proposes entries
+  (operator commits them; nothing is auto-written).
+- `ctfctl knowledge review` writes `reports/review-<name>.md` per challenge (timeline,
+  techniques, waste points).
+- Solve-loop prompts now inject matching knowledge (`successful` first) so agents stop
+  repeating failed techniques; ledger contains no flag-like content by construction.
+
+
 
 ### Summary
 

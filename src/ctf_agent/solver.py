@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any, Callable, Protocol
 
 from . import backends as backends_module
+from . import knowledge as knowledge_module
 from .errors import CTFError
 from .flag import candidate as flag_candidate_api
 from .state import StateStore
@@ -131,6 +132,24 @@ def _category_playbook(category: str) -> str:
     return PLAYBOOKS.get(str(category).upper(), PLAYBOOKS["default"])
 
 
+def _knowledge_block(challenge_dir: Path, category: str, limit: int = 3) -> str:
+    """Inject evidence-backed lessons from previous challenges into a round prompt."""
+    try:
+        entries = knowledge_module.match_entries(challenge_dir, category, limit=limit)
+    except CTFError:
+        return ""
+    if not entries:
+        return ""
+    lines = ["KNOWLEDGE (from previous challenges, do not repeat failed ones)", ""]
+    for item in entries:
+        lines.append(
+            f"- [{item.get('outcome')}] {item.get('technique')} "
+            f"(trigger: {item.get('trigger')}; lesson: {item.get('conclusion')})"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _state_digest(challenge_dir: Path) -> dict[str, Any]:
     data = StateStore(challenge_dir).load()
     facts = []
@@ -179,6 +198,7 @@ def compose_round_prompt(
     extra_text = ""
     if extra_context:
         extra_text = f"EXTRA CONTEXT (from the benchmark/operator)\n{extra_context}\n"
+    knowledge_text = _knowledge_block(challenge_dir, digest["category"])
     history_text = ""
     for item in history[-4:]:
         commands = [c.get("argv") for c in item.get("executed", [])]
@@ -205,7 +225,7 @@ HYPOTHESES
 PLAYBOOK ({digest['category']})
 {_category_playbook(digest['category'])}
 
-PREVIOUS ROUNDS
+{knowledge_text}PREVIOUS ROUNDS
 {history_text or '(none)'}
 
 You are at round {round_index} of {max_rounds}. Reply with ONE JSON object only:

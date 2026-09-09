@@ -50,7 +50,8 @@ It is **not**:
 | Benchmark: 12 original challenges (6× easy + 6× medium) | shipped, 12/12 script baseline | `bench/RESULTS.md` |
 | CTFd platform bridge + trajectory export | shipped | `docs/SOLVER_ARCHITECTURE.md` |
 | Parallel racing + thread/process-safe runtime lock | shipped | `docs/SOLVER_ARCHITECTURE.md` |
-| Memory / knowledge ledger, harder suite v3 | next | `docs/CAPABILITY_PLAN.md` |
+| Knowledge ledger + post-solve review | shipped | `docs/SOLVER_ARCHITECTURE.md` |
+| Harder suite v3 | next | `docs/CAPABILITY_PLAN.md` |
 
 ## Quick start
 
@@ -81,6 +82,9 @@ Daily-driver commands:
 ./tools/ctfctl bench                                 # offline capability benchmark
 ./tools/ctfctl platform ctfd pull --url https://ctf.example --event EVENT
 ./tools/ctfctl trajectory export                     # CSAW-style trajectory JSON + MD
+./tools/ctfctl knowledge add -C <challenge> --category rev \
+    --technique "..." --trigger "..." --conclusion "..." \
+    --outcome successful --evidence LOG-000001
 ```
 
 `make demo` runs a complete no-model walkthrough: doctor → init → hashid/john →

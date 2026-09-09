@@ -7,6 +7,7 @@
 > 仅可用于你被明确授权测试的系统与挑战；赛事规则始终优先于本仓库。
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![CI](https://img.shields.io/github/actions/workflow/status/ysxemail003-cpu/ctfctl/ci.yml?branch=master&label=CI&logo=github)
 ![Python >= 3.11](https://img.shields.io/badge/python-3.11+-3776AB.svg)
 ![Target: Kali Linux](https://img.shields.io/badge/target-Kali%20Linux-557C94.svg)
 

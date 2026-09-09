@@ -85,7 +85,13 @@ def test_concurrent_run_command_log_ids_are_unique(tmp_path: Path):
     assert len(ids) == 20
     assert len(set(ids)) == 20, "duplicate LOG ids allocated under concurrency"
 
-    metadata_files = sorted((challenge / "logs").glob("*.json"))
+    from ctf_agent.logindex import INDEX_FILENAME
+
+    metadata_files = sorted(
+        path
+        for path in (challenge / "logs").glob("*.json")
+        if path.name != INDEX_FILENAME
+    )
     assert len(metadata_files) == 20
     seen: set[str] = set()
     for path in metadata_files:

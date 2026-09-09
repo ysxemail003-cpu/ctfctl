@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .errors import CTFError
+from . import logindex
 from .policy import PolicyError, resolve_inside
 from .redaction import collect_secrets, redact_text
 from .runtime_lock import challenge_lock
@@ -101,16 +102,8 @@ def command_hash(
 
 
 def existing_metadata(log_dir: Path, wanted_hash: str) -> dict[str, Any] | None:
-    if not log_dir.is_dir():
-        return None
-    for path in sorted(log_dir.glob("*.json")):
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if data.get("command_hash") == wanted_hash:
-            return data
-    return None
+    """Find a previously logged command by hash using the query index."""
+    return logindex.lookup_by_hash(log_dir, wanted_hash)
 
 
 def _max_output_bytes(challenge_dir: Path) -> int:
@@ -344,6 +337,7 @@ def run_command(
         except CTFError as exc:
             metadata["budget_error"] = str(exc)
         atomic_write_text(metadata_path, json.dumps(metadata, ensure_ascii=False, indent=2) + "\n")
+        logindex.update(log_dir, metadata)
         state.event(
             "command_executed",
             {
@@ -484,5 +478,6 @@ def run_tty(
             metadata_path,
             json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
         )
+        logindex.update(log_dir, metadata)
         state.event("command_executed", metadata)
         return metadata

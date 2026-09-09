@@ -20,7 +20,11 @@ def _load_logs(challenge_dir: Path, limit: int) -> list[dict[str, Any]]:
     log_dir = challenge_dir / "logs"
     if not log_dir.is_dir():
         return logs
+    from .logindex import INDEX_FILENAME
+
     for path in sorted(log_dir.glob("*.json"), key=_log_sort_key, reverse=True)[:limit]:
+        if path.name == INDEX_FILENAME:
+            continue
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):

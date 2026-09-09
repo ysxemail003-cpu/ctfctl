@@ -1,5 +1,8 @@
 import json
+import os
 from pathlib import Path
+
+import pytest
 
 from ctf_agent.challenge import init_challenge
 from ctf_agent.runner import run_command
@@ -147,3 +150,64 @@ def test_command_cache_includes_input_content_and_network_context(tmp_path: Path
     assert two.get("cache_hit") is not True
     assert two["id"] != one["id"]
     assert two["scope_check"]["host"] == "two.example"
+
+
+def test_timeout_kills_process_group_and_leaves_no_children(tmp_path: Path):
+    """A timed-out command and its grandchild must both be reaped."""
+    if not os.path.isdir("/proc"):
+        pytest.skip("requires Linux /proc")
+    import time as _time
+
+    from ctf_agent.challenge import init_challenge
+    from ctf_agent.runner import run_command
+
+    challenge = init_challenge(tmp_path, "demo", "timeout", "misc", "AI_NATIVE", confirm_authorization=True)
+    pid_file = tmp_path / "grandchild.pid"
+    code = (
+        "import subprocess, sys, time\n"
+        "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+        f"open({str(pid_file)!r}, 'w').write(str(p.pid))\n"
+        "time.sleep(60)\n"
+    )
+    meta = run_command(
+        challenge,
+        ["python3", "-c", code],
+        "timeout",
+        "test",
+        quiet=True,
+        timeout=2,
+    )
+    assert meta["timed_out"] is True
+    assert meta["terminated"] in {"SIGTERM", "SIGKILL"}
+    assert meta["exit_code"] == 124
+    grandchild_pid = int(pid_file.read_text(encoding="utf-8"))
+    deadline = _time.monotonic() + 5
+    while _time.monotonic() < deadline:
+        if not os.path.exists(f"/proc/{grandchild_pid}"):
+            break
+        _time.sleep(0.1)
+    assert not os.path.exists(f"/proc/{grandchild_pid}"), "grandchild survived the parent timeout"
+
+
+def test_run_command_respects_scope_output_limit(tmp_path: Path):
+    from ctf_agent.challenge import init_challenge
+    from ctf_agent.runner import run_command
+    from ctf_agent.scope import ScopeStore
+
+    challenge = init_challenge(tmp_path, "demo", "limit", "misc", "AI_NATIVE", confirm_authorization=True)
+    scope_store = ScopeStore(challenge)
+    scope_data = scope_store.load()
+    scope_data.setdefault("limits", {})["max_output_bytes"] = 16
+    scope_store.save(scope_data)
+
+    meta = run_command(
+        challenge,
+        ["python3", "-c", "print('x' * 100)"],
+        "big-output",
+        "test",
+        quiet=True,
+    )
+    assert meta["stdout_truncated"] is True
+    assert meta["stdout_size"] <= 16
+    assert meta["stdout_full_size"] >= 100
+    assert meta["exit_code"] == 0

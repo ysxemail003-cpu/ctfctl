@@ -4,16 +4,25 @@ import json
 import os
 import re
 import shlex
+import signal
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from .errors import CTFError
+from .runtime_lock import challenge_lock
 from .scope import ScopeStore, ensure_network_command_safe, validate_network_command
 from .state import StateStore
 from .util import atomic_write_text, display_bytes, next_log_id, sha256_bytes, sha256_file, utcnow
 
 SAFE_TAG_RE = re.compile(r"[^a-z0-9._-]+")
+
+#: Seconds to wait after SIGTERM before escalating to SIGKILL.
+TERM_GRACE_SECONDS = 5
+
+#: Default cap for persisted stdout/stderr when the scope does not define one.
+DEFAULT_MAX_OUTPUT_BYTES = 5_000_000
 
 
 def safe_tag(tag: str) -> str:
@@ -101,6 +110,56 @@ def existing_metadata(log_dir: Path, wanted_hash: str) -> dict[str, Any] | None:
     return None
 
 
+def _max_output_bytes(challenge_dir: Path) -> int:
+    """Output cap from `.scope.yaml` limits, falling back to the default."""
+    scope_path = challenge_dir / ".scope.yaml"
+    if not scope_path.is_file():
+        return DEFAULT_MAX_OUTPUT_BYTES
+    try:
+        limits = ScopeStore(challenge_dir).load().get("limits") or {}
+    except CTFError:
+        return DEFAULT_MAX_OUTPUT_BYTES
+    try:
+        return int(limits.get("max_output_bytes") or DEFAULT_MAX_OUTPUT_BYTES)
+    except (TypeError, ValueError):
+        return DEFAULT_MAX_OUTPUT_BYTES
+
+
+def _trim(data: bytes, limit: int) -> tuple[bytes, bool]:
+    if limit <= 0 or len(data) <= limit:
+        return data, False
+    return data[:limit], True
+
+
+def _terminate_process_group(proc: subprocess.Popen) -> str:
+    """Terminate *proc*'s process group, escalating to SIGKILL after a grace period.
+
+    Children are started with ``start_new_session=True`` so the command is a
+    session/process-group leader; killing the group also reaps grandchildren.
+    Returns the signal name used for the final kill.
+    """
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        proc.wait(timeout=TERM_GRACE_SECONDS)
+        return "SIGTERM"
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        proc.wait()
+        return "SIGKILL"
+
+
+def _duration_ms(started_at: str, ended_at: str) -> int:
+    start = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+    end = datetime.fromisoformat(ended_at.replace("Z", "+00:00"))
+    return int((end - start).total_seconds() * 1000)
+
+
 def run_command(
     challenge_dir: Path,
     command: list[str],
@@ -116,164 +175,194 @@ def run_command(
     input_file: Path | None = None,
     env_vars: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    """Run a command with complete logging.
+
+    The whole operation (cache lookup, ID allocation, execution, metadata
+    write, event append) runs under the challenge-level runtime lock so two
+    agents cannot interleave log IDs or metadata on the same challenge.
+    Children run in a dedicated process group; on timeout the whole group is
+    terminated so no grandchild process survives.
+    """
     challenge_dir = challenge_dir.resolve()
-    state = StateStore(challenge_dir)
-    state.load()
-    if input_file is not None and not input_file.is_file():
-        raise CTFError(f"Input file not found: {input_file}")
-    scope = ScopeStore(challenge_dir)
-    ensure_network_command_safe(command, network, target)
-    scope_result = None
-    if network and target:
-        scope_result = scope.check(target, port)
-        validate_network_command(command, target, port, scope.check)
-        state_data = state.load()
-        state_data.setdefault("scope", {})["checked_at"] = scope_result["checked_at"]
-        state.save(state_data)
+    with challenge_lock(challenge_dir, description=f"run_command:{tag}"):
+        state = StateStore(challenge_dir)
+        state.load()
+        if input_file is not None and not input_file.is_file():
+            raise CTFError(f"Input file not found: {input_file}")
+        scope = ScopeStore(challenge_dir)
+        ensure_network_command_safe(command, network, target)
+        scope_result = None
+        if network and target:
+            scope_result = scope.check(target, port)
+            validate_network_command(command, target, port, scope.check)
+            state_data = state.load()
+            state_data.setdefault("scope", {})["checked_at"] = scope_result["checked_at"]
+            state.save(state_data)
 
-    log_dir = challenge_dir / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    tag = safe_tag(tag)
-    cwd = str(challenge_dir)
-    hash_value = command_hash(
-        command,
-        cwd,
-        env_vars,
-        input_file,
-        network=network,
-        target=target,
-        port=port,
-        timeout=timeout,
-    )
-    if not force:
-        previous = existing_metadata(log_dir, hash_value)
-        if previous:
-            previous["cache_hit"] = True
-            if not quiet:
-                print(
-                    f"[skip] identical command already logged as {previous['id']} "
-                    f"(use --force to rerun)",
-                    flush=True,
-                )
-            return previous
-
-    log_id = next_log_id(log_dir)
-    sequence = log_id.split("-")[1]
-    base = f"{sequence}-{tag}"
-    metadata_path = log_dir / f"{base}.json"
-    stdout_path = log_dir / f"{base}.stdout"
-    stderr_path = log_dir / f"{base}.stderr"
-
-    started = utcnow()
-    env = os.environ.copy()
-    if env_vars:
-        env.update(env_vars)
-    stdin_data = None
-    if input_file is not None:
-        stdin_data = input_file.read_bytes()
-
-    timed_out = False
-    error: str | None = None
-    try:
-        proc = subprocess.run(
+        log_dir = challenge_dir / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        tag = safe_tag(tag)
+        cwd = str(challenge_dir)
+        hash_value = command_hash(
             command,
-            cwd=cwd,
-            input=stdin_data,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            cwd,
+            env_vars,
+            input_file,
+            network=network,
+            target=target,
+            port=port,
             timeout=timeout,
-            env=env,
-            check=False,
         )
-        stdout = proc.stdout
-        stderr = proc.stderr
-        returncode = proc.returncode
-    except subprocess.TimeoutExpired as exc:
-        timed_out = True
-        stdout = exc.stdout or b""
-        stderr = exc.stderr or b""
-        if isinstance(stdout, str):
-            stdout = stdout.encode("utf-8", errors="replace")
-        if isinstance(stderr, str):
-            stderr = stderr.encode("utf-8", errors="replace")
-        returncode = 124
-        error = f"timeout after {timeout} seconds"
-    except FileNotFoundError as exc:
-        stdout = b""
-        stderr = str(exc).encode("utf-8")
-        returncode = 127
-        error = "command not found"
-    except PermissionError as exc:
-        stdout = b""
-        stderr = str(exc).encode("utf-8")
-        returncode = 126
-        error = "permission denied"
+        if not force:
+            previous = existing_metadata(log_dir, hash_value)
+            if previous:
+                previous["cache_hit"] = True
+                if not quiet:
+                    print(
+                        f"[skip] identical command already logged as {previous['id']} "
+                        f"(use --force to rerun)",
+                        flush=True,
+                    )
+                return previous
 
-    stdout_path.write_bytes(stdout)
-    stderr_path.write_bytes(stderr)
-    ended = utcnow()
-    metadata: dict[str, Any] = {
-        "id": log_id,
-        "tag": tag,
-        "class": classification,
-        "command": command,
-        "command_display": shlex.join(command),
-        "command_hash": hash_value,
-        "cwd": cwd,
-        "input_file": str(input_file) if input_file else None,
-        "started_at": started,
-        "ended_at": ended,
-        "duration_ms": 0,
-        "exit_code": returncode,
-        "timed_out": timed_out,
-        "error": error,
-        "stdout_file": str(stdout_path.relative_to(challenge_dir)),
-        "stderr_file": str(stderr_path.relative_to(challenge_dir)),
-        "stdout_size": len(stdout),
-        "stderr_size": len(stderr),
-        "stdout_sha256": sha256_bytes(stdout),
-        "stderr_sha256": sha256_bytes(stderr),
-        "scope_check": scope_result,
-    }
-    if metadata["started_at"] and metadata["ended_at"]:
-        from datetime import datetime
+        log_id = next_log_id(log_dir)
+        sequence = log_id.split("-")[1]
+        base = f"{sequence}-{tag}"
+        metadata_path = log_dir / f"{base}.json"
+        stdout_path = log_dir / f"{base}.stdout"
+        stderr_path = log_dir / f"{base}.stderr"
 
-        start = datetime.fromisoformat(metadata["started_at"].replace("Z", "+00:00"))
-        end = datetime.fromisoformat(metadata["ended_at"].replace("Z", "+00:00"))
-        metadata["duration_ms"] = int((end - start).total_seconds() * 1000)
+        env = os.environ.copy()
+        if env_vars:
+            env.update(env_vars)
+        stdin_data = None
+        if input_file is not None:
+            stdin_data = input_file.read_bytes()
 
-    atomic_write_text(metadata_path, json.dumps(metadata, ensure_ascii=False, indent=2) + "\n")
-    state.event(
-        "command_executed",
-        {
-            "log_id": log_id,
+        max_output_bytes = _max_output_bytes(challenge_dir)
+        started = utcnow()
+        timed_out = False
+        terminated: str | None = None
+        error: str | None = None
+        try:
+            proc = subprocess.Popen(
+                command,
+                cwd=cwd,
+                stdin=subprocess.PIPE if stdin_data is not None else None,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                start_new_session=True,
+            )
+            try:
+                stdout, stderr = proc.communicate(input=stdin_data, timeout=timeout)
+                returncode = proc.returncode
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                terminated = _terminate_process_group(proc)
+                stdout = proc.stdout.read() if proc.stdout else b""
+                stderr = proc.stderr.read() if proc.stderr else b""
+                if proc.stdout is not None:
+                    proc.stdout.close()
+                if proc.stderr is not None:
+                    proc.stderr.close()
+                returncode = 124
+                error = (
+                    f"timeout after {timeout} seconds; "
+                    f"process group terminated ({terminated})"
+                )
+        except FileNotFoundError as exc:
+            stdout = b""
+            stderr = str(exc).encode("utf-8")
+            returncode = 127
+            error = "command not found"
+        except PermissionError as exc:
+            stdout = b""
+            stderr = str(exc).encode("utf-8")
+            returncode = 126
+            error = "permission denied"
+
+        if stdout is None:
+            stdout = b""
+        if stderr is None:
+            stderr = b""
+        stdout_full_size = len(stdout)
+        stderr_full_size = len(stderr)
+        stdout, stdout_truncated = _trim(stdout, max_output_bytes)
+        stderr, stderr_truncated = _trim(stderr, max_output_bytes)
+
+        stdout_path.write_bytes(stdout)
+        stderr_path.write_bytes(stderr)
+        ended = utcnow()
+        metadata: dict[str, Any] = {
+            "id": log_id,
             "tag": tag,
             "class": classification,
             "command": command,
+            "command_display": shlex.join(command),
+            "command_hash": hash_value,
+            "cwd": cwd,
+            "input_file": str(input_file) if input_file else None,
+            "started_at": started,
+            "ended_at": ended,
+            "duration_ms": _duration_ms(started, ended),
             "exit_code": returncode,
-            "stdout_file": metadata["stdout_file"],
-            "stderr_file": metadata["stderr_file"],
+            "timed_out": timed_out,
+            "terminated": terminated,
+            "error": error,
+            "stdout_file": str(stdout_path.relative_to(challenge_dir)),
+            "stderr_file": str(stderr_path.relative_to(challenge_dir)),
+            "stdout_size": len(stdout),
+            "stderr_size": len(stderr),
+            "stdout_full_size": stdout_full_size,
+            "stderr_full_size": stderr_full_size,
+            "stdout_truncated": stdout_truncated,
+            "stderr_truncated": stderr_truncated,
+            "stdout_sha256": sha256_bytes(stdout),
+            "stderr_sha256": sha256_bytes(stderr),
             "scope_check": scope_result,
-        },
-    )
-
-    if not quiet:
-        if stdout:
-            print(display_bytes(stdout, print_limit), end="" if stdout.endswith(b"\n") else "\n")
-        if stderr:
-            print(display_bytes(stderr, print_limit), file=__import__("sys").stderr, end="" if stderr.endswith(b"\n") else "\n")
-        print(
-            json.dumps(
-                {
-                    "id": log_id,
-                    "exit_code": returncode,
-                    "stdout_file": metadata["stdout_file"],
-                    "stderr_file": metadata["stderr_file"],
-                },
-                ensure_ascii=False,
-            )
+        }
+        atomic_write_text(metadata_path, json.dumps(metadata, ensure_ascii=False, indent=2) + "\n")
+        state.event(
+            "command_executed",
+            {
+                "log_id": log_id,
+                "tag": tag,
+                "class": classification,
+                "command": command,
+                "exit_code": returncode,
+                "stdout_file": metadata["stdout_file"],
+                "stderr_file": metadata["stderr_file"],
+                "scope_check": scope_result,
+            },
         )
-    return metadata
+
+        if not quiet:
+            if stdout:
+                print(
+                    display_bytes(stdout, print_limit),
+                    end="" if stdout.endswith(b"\n") else "\n",
+                )
+            if stderr:
+                import sys
+
+                print(
+                    display_bytes(stderr, print_limit),
+                    file=sys.stderr,
+                    end="" if stderr.endswith(b"\n") else "\n",
+                )
+            print(
+                json.dumps(
+                    {
+                        "id": log_id,
+                        "exit_code": returncode,
+                        "stdout_file": metadata["stdout_file"],
+                        "stderr_file": metadata["stderr_file"],
+                    },
+                    ensure_ascii=False,
+                )
+            )
+        return metadata
 
 
 def run_tty(
@@ -288,55 +377,80 @@ def run_tty(
 ) -> dict[str, Any]:
     """Run an interactive command under script(1), preserving a transcript."""
     challenge_dir = challenge_dir.resolve()
-    state = StateStore(challenge_dir)
-    scope = ScopeStore(challenge_dir)
-    ensure_network_command_safe(command, network, target)
-    scope_result = None
-    if network and target:
-        scope_result = scope.check(target, port)
-        validate_network_command(command, target, port, scope.check)
-        state_data = state.load()
-        state_data.setdefault("scope", {})["checked_at"] = scope_result["checked_at"]
-        state.save(state_data)
-    log_dir = challenge_dir / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    tag = safe_tag(tag)
-    log_id = next_log_id(log_dir)
-    sequence = log_id.split("-")[1]
-    base = f"{sequence}-{tag}"
-    transcript = log_dir / f"{base}.transcript"
-    metadata_path = log_dir / f"{base}.json"
+    with challenge_lock(challenge_dir, description=f"run_tty:{tag}"):
+        state = StateStore(challenge_dir)
+        scope = ScopeStore(challenge_dir)
+        ensure_network_command_safe(command, network, target)
+        scope_result = None
+        if network and target:
+            scope_result = scope.check(target, port)
+            validate_network_command(command, target, port, scope.check)
+            state_data = state.load()
+            state_data.setdefault("scope", {})["checked_at"] = scope_result["checked_at"]
+            state.save(state_data)
+        log_dir = challenge_dir / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        tag = safe_tag(tag)
+        log_id = next_log_id(log_dir)
+        sequence = log_id.split("-")[1]
+        base = f"{sequence}-{tag}"
+        transcript = log_dir / f"{base}.transcript"
+        metadata_path = log_dir / f"{base}.json"
 
-    wrapped = ["script", "-qef", str(transcript), "-c", shlex.join(command)]
-    started = utcnow()
-    try:
-        proc = subprocess.run(wrapped, cwd=challenge_dir, check=False, timeout=timeout)
-        returncode = proc.returncode
+        wrapped = ["script", "-qef", str(transcript), "-c", shlex.join(command)]
+        started = utcnow()
         timed_out = False
-        error = None
-    except subprocess.TimeoutExpired:
-        returncode = 124
-        timed_out = True
-        error = f"timeout after {timeout} seconds"
+        terminated: str | None = None
+        error: str | None = None
+        try:
+            proc = subprocess.Popen(
+                wrapped,
+                cwd=challenge_dir,
+                start_new_session=True,
+            )
+            try:
+                returncode = proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                terminated = _terminate_process_group(proc)
+                returncode = 124
+                error = (
+                    f"timeout after {timeout} seconds; "
+                    f"process group terminated ({terminated})"
+                )
+        except FileNotFoundError:
+            returncode = 127
+            error = "command not found"
+        except PermissionError:
+            returncode = 126
+            error = "permission denied"
 
-    stdout_size = transcript.stat().st_size if transcript.exists() else 0
-    metadata = {
-        "id": log_id,
-        "tag": tag,
-        "class": classification,
-        "command": command,
-        "command_display": shlex.join(command),
-        "interactive": True,
-        "cwd": str(challenge_dir),
-        "started_at": started,
-        "ended_at": utcnow(),
-        "exit_code": returncode,
-        "timed_out": timed_out,
-        "error": error,
-        "transcript_file": str(transcript.relative_to(challenge_dir)) if transcript.exists() else None,
-        "transcript_size": stdout_size,
-        "scope_check": scope_result,
-    }
-    atomic_write_text(metadata_path, json.dumps(metadata, ensure_ascii=False, indent=2) + "\n")
-    state.event("command_executed", metadata)
-    return metadata
+        stdout_size = transcript.stat().st_size if transcript.exists() else 0
+        ended = utcnow()
+        metadata: dict[str, Any] = {
+            "id": log_id,
+            "tag": tag,
+            "class": classification,
+            "command": command,
+            "command_display": shlex.join(command),
+            "interactive": True,
+            "cwd": str(challenge_dir),
+            "started_at": started,
+            "ended_at": ended,
+            "duration_ms": _duration_ms(started, ended),
+            "exit_code": returncode,
+            "timed_out": timed_out,
+            "terminated": terminated,
+            "error": error,
+            "transcript_file": (
+                str(transcript.relative_to(challenge_dir)) if transcript.exists() else None
+            ),
+            "transcript_size": stdout_size,
+            "scope_check": scope_result,
+        }
+        atomic_write_text(
+            metadata_path,
+            json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+        )
+        state.event("command_executed", metadata)
+        return metadata

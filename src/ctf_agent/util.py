@@ -99,12 +99,29 @@ def next_id(path: Path, prefix: str, width: int = 6) -> str:
 
 
 def next_log_id(log_dir: Path) -> str:
+    """Return the next LOG-* id for a challenge log directory.
+
+    The id is derived from real on-disk metadata: the ``id`` field of existing
+    ``*.json`` metadata wins, with the legacy ``NNNNNN-<tag>.json`` filename
+    scheme as a fallback. Callers must hold the challenge runtime lock so the
+    scan-then-allocate step is atomic across processes.
+    """
     highest = 0
     if log_dir.is_dir():
         for path in log_dir.iterdir():
-            match = re.match(r"^(\d{6})-.*\.json$", path.name)
-            if match:
-                highest = max(highest, int(match.group(1)))
+            if path.is_file():
+                if path.suffix == ".json":
+                    try:
+                        record = json.loads(path.read_text(encoding="utf-8"))
+                    except (OSError, json.JSONDecodeError):
+                        record = None
+                    if isinstance(record, dict):
+                        match = re.match(r"^LOG-(\d{6})$", str(record.get("id", "")))
+                        if match:
+                            highest = max(highest, int(match.group(1)))
+                match = re.match(r"^(\d{6})-", path.name)
+                if match:
+                    highest = max(highest, int(match.group(1)))
     return f"LOG-{highest + 1:06d}"
 
 

@@ -12,7 +12,7 @@ the maintainer email listed in `pyproject.toml` / the repository profile
 (replace the placeholder below before release):
 
 ```
-maintainer: <you@example.com>
+maintainer: ysxemail001@163.com
 ```
 
 Include: affected version/commit, a minimal reproduction, impact, and whether

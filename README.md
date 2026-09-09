@@ -1,246 +1,137 @@
-# ctf-agent — Evidence-First AI CTF Runtime
+[**English**](README.md) | [**简体中文**](README.zh-CN.md)
 
-A lightweight, auditable runtime for authorized CTF and lab work on Kali Linux. It gives Claude Code and Codex a shared contract for challenge directories, command logging, durable state, specialist handoffs, and flag verification.
+# ctfctl
+
+**Evidence-first, agentic CTF runtime for Kali Linux** — build, run, and audit your own AI CTF experts.
 
 > Use only on systems and challenges you are explicitly authorized to test. Event rules always override this repository.
->
-> Positioning: this is not a prompt-pack for one-off solves — it is an auditable
-> runtime for building and fielding your own **AI CTF experts** (autonomous solve
-> loop, structured Kali-tool adapters, reproducible benchmark, platform bridge,
-> trajectory export). Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-> (process layer) + [`docs/SOLVER_ARCHITECTURE.md`](docs/SOLVER_ARCHITECTURE.md) (capability layer).
 
-## Install
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python >= 3.11](https://img.shields.io/badge/python-3.11+-3776AB.svg)
+![Target: Kali Linux](https://img.shields.io/badge/target-Kali%20Linux-557C94.svg)
 
-Kali blocks system-wide `pip` installs by default. Use the bundled launcher directly:
+---
 
-```bash
-cd ~/ctf-agent
-./tools/ctfctl --help
-```
+## What it is
 
-Optional editable install in a local virtual environment:
+`ctfctl` is a runtime that turns natural language into an **auditable CTF-solving workflow**.
+Instead of a one-shot prompt pack, it gives you (or your team) a layered system for fielding
+**your own AI CTF experts**: structured access to Kali tools, an autonomous solve loop, a
+reproducible capability benchmark, a CTF-platform bridge, and CSAW-style trajectory export —
+with every step logged, scope-checked and evidence-linked.
 
-```bash
-cd ~/ctf-agent
-make install
-source .venv/bin/activate
-ctfctl --help
-```
+It is **not**:
 
-## Conversational usage
+- a permission bypass — authorization, scope, and event rules are enforced in code;
+- a single hard-coded solver — it is a runtime you build agents on;
+- a black box — every claim resolves back to a `LOG-*` / `E-*` artifact.
 
-The intended interface is natural language. You should not need to memorize `ctfctl`.
+## Highlights
 
-In Claude Code or Codex, from `~/ctf-agent`, say:
+- **Evidence is enforced, not suggested.** Facts, hypotheses, and state transitions must
+  reference real logs or artifacts; unresolved references are rejected.
+- **State survives context.** `state.yaml` is canonical; compression, restarts, and model
+  switches never lose progress (`ctfctl context`, `next_action`).
+- **Safety is code, not a prompt.** Target scope, per-hop redirect checks, secret redaction,
+  process-group timeouts, budget ledgers, and dry-run flag submission.
+- **It actually solves.** Structured adapters for crypto/forensics/web/pwn/rev tools, an
+  autonomous solve loop (`ctfctl solve`), parallel racing (`ctfctl race`), and a
+  12-challenge offline benchmark (`ctfctl bench`) that measures progress.
+- **It ships for competitions.** CTFd `pull`, `no_auto_submit` by default, and trajectory
+  export aligned with agentic-CTF submission requirements.
 
-```text
-帮我解这道 Web 题：
-比赛 2026-demo，题目 web-login，
-目标 http://challenge.example.ctf，
-比赛允许 AI 自动解题，
-不要自动提交 flag，
-附件 ~/Downloads/web.zip。
-```
+## Capability map
 
-Then say:
-
-```text
-继续
-```
-
-or:
-
-```text
-当前状态
-```
-
-The agent internally uses `ctfctl intake`, `ctfctl context`, `ctfctl tool`, `ctfctl run`, state updates, specialist handoffs, and flag verification. Routine commands are hidden from the operator.
-
-Useful operator phrases:
-
-- `继续` — resume the current challenge from its saved next action.
-- `当前状态` — show facts, hypotheses, failures, flag status, and next action.
-- `为什么？` — explain a conclusion with `LOG-*` / `E-*` evidence.
-- `换个方向` — abandon the current hypothesis and choose another.
-- `不要提交 flag` — require an explicit decision before submission.
-- `生成报告` — create `reports/final.md`.
+| Area | Status | Where |
+|---|---|---|
+| Process layer: lock / state / evidence / scope / flags / logs | shipped (v0.4.1) | `docs/ARCHITECTURE.md` |
+| Structured Kali-tool adapters (crypto, forensics, web, pwn/rev) | shipped | `docs/TOOL_ROUTING.md` |
+| Solve loop + model backends (codex / claude / gemini) | shipped | `docs/SOLVER_ARCHITECTURE.md` |
+| Benchmark: 12 original challenges (6× easy + 6× medium) | shipped, 12/12 script baseline | `bench/RESULTS.md` |
+| CTFd platform bridge + trajectory export | shipped | `docs/SOLVER_ARCHITECTURE.md` |
+| Parallel racing + thread/process-safe runtime lock | shipped | `docs/SOLVER_ARCHITECTURE.md` |
+| Memory / knowledge ledger, harder suite v3 | next | `docs/CAPABILITY_PLAN.md` |
 
 ## Quick start
 
 ```bash
-cd ~/ctf-agent
-./tools/ctfctl doctor
+cd ~/ctfctl
+./tools/ctfctl doctor                     # environment + tool availability
 
 ./tools/ctfctl init \
-  --event 2026-demo \
-  --challenge web-login \
-  --category web \
-  --mode AI_NATIVE \
-  --target challenge.example.ctf \
-  --port 80 \
+  --event 2026-demo --challenge web-login --category web \
+  --mode AI_NATIVE --target challenge.example.ctf --port 80 \
   --confirm-authorization
 
 export CTF_CHALLENGE_DIR="$PWD/workspace/contests/2026-demo/web-login"
-
 ./tools/ctfctl state show
-./tools/ctfctl tool http http://challenge.example.ctf/
-./tools/ctfctl flag verify --replay 'python3 scripts/solve.py' --runs 2
+./tools/ctfctl tool web-inventory http://challenge.example.ctf/
 ```
 
-## Core rules
-
-1. `state.yaml` is canonical; `STATE.md` is generated.
-2. `original/` is immutable; use `work/`.
-3. Every substantive command goes through `ctfctl run` or `ctfctl tool`.
-4. Network commands require `--network --target`; add `--port` when the target itself has no port and the scope lists specific ports.
-5. Every fact and hypothesis references `LOG-*`, `E-*`, or an artifact.
-6. A flag is not solved until reproduced, and not accepted until the platform says so.
-
-## Commands
-
-### Environment
+Daily-driver commands:
 
 ```bash
-./tools/ctfctl doctor
+./tools/ctfctl tool hashid <hash>                    # identify a hash
+./tools/ctfctl tool crack <hash> --wordlist words.txt --tool john
+./tools/ctfctl tool exif|binwalk|archive|zsteg|pcap <file>
+./tools/ctfctl tool ffuf http://host/FUZZ --wordlist words.txt
+./tools/ctfctl tool rop binary --only 'pop|ret'      # pwn/rev recon
+./tools/ctfctl solve --backend auto                  # autonomous solve loop
+./tools/ctfctl race --backends codex,claude          # race backends; first SOLVED wins
+./tools/ctfctl bench                                 # offline capability benchmark
+./tools/ctfctl platform ctfd pull --url https://ctf.example --event EVENT
+./tools/ctfctl trajectory export                     # CSAW-style trajectory JSON + MD
 ```
 
-### Challenge
+`make demo` runs a complete no-model walkthrough: doctor → init → hashid/john →
+evidence → trajectory export → benchmark subset.
 
-```bash
-./tools/ctfctl init ...
-./tools/ctfctl state show
-./tools/ctfctl state render
-./tools/ctfctl report final ...
+## How it works
+
+```text
+operator / orchestrator
+  → intake / context                  (natural language in, state out)
+  → scope + authorization             (no scope, no action)
+  → run / tool / tty                  (every command logged + budgeted)
+  → logs / evidence / state           (the audit trail)
+  → solve loop / specialists          (hypothesis-driven rounds)
+  → flag candidate → verify → submit  (gated, dry-run by default)
+  → report / trajectory               (human + machine readable)
 ```
 
-### Scope
+Two layers with one rule: **capability code only calls public runtime primitives; it never
+mutates canonical state directly.** Every solve-loop action executes through `ctfctl`, so the
+evidence layer stays intact even when agents race in parallel.
 
-```bash
-./tools/ctfctl scope show
-./tools/ctfctl scope confirm --notes "..."
-./tools/ctfctl scope add-host example.ctf --port 80
-./tools/ctfctl scope check example.ctf 80
-./tools/ctfctl scope allow flag-submission
+Repository layout:
+
+```text
+src/ctf_agent/          process + capability layer (import name: ctf_agent)
+bench/challenges/       original offline synthetic challenges (no real-competition material)
+agent-specs/            orchestrator / web / pwn / rev / verification specs
+examples/demo.sh        end-to-end demo
+docs/                   architecture, plans, tool routing, solver architecture
 ```
-
-### Conversational runtime
-
-```bash
-./tools/ctfctl intake --text '...'
-./tools/ctfctl import-files ~/Downloads/chall.zip
-./tools/ctfctl current
-./tools/ctfctl challenges
-./tools/ctfctl use EVENT/CHALLENGE
-./tools/ctfctl status --markdown
-./tools/ctfctl context --markdown
-./tools/ctfctl solve --backend auto   # autonomous solve loop (codex/claude/gemini)
-./tools/ctfctl race --backends codex,claude   # race backends; first SOLVED wins
-./tools/ctfctl bench --parallel 4             # run the synthetic suite concurrently
-./tools/ctfctl platform ctfd pull --url https://ctf.example --event EVENT   # CTFd bridge
-./tools/ctfctl trajectory export     # CSAW-style trajectory JSON + Markdown
-```
-
-### Commands and tools
-
-```bash
-./tools/ctfctl run --tag strings -- strings original/chall
-./tools/ctfctl tool file original/chall
-./tools/ctfctl tool web-inventory http://example.ctf/
-./tools/ctfctl tool nmap example.ctf --port 80 --port 443
-./tools/ctfctl run --tag nmap --network --target example.ctf -- nmap -Pn -sV -p 80 example.ctf
-./tools/ctfctl run --tag remote --network --target pwn.example.ctf --port 1337 -- python3 scripts/exploit.py
-./tools/ctfctl tty --tag gdb -- gdb work/chall
-./tools/ctfctl tool http http://example.ctf/
-./tools/ctfctl tool elf original/chall
-./tools/ctfctl tool ghidra original/chall
-```
-
-### State and evidence
-
-```bash
-./tools/ctfctl state fact add "..." --evidence LOG-000001
-./tools/ctfctl state hypothesis add "..." --test "..." --expected "..."
-./tools/ctfctl state hypothesis update H-0001 --status CONFIRMED --result "..."
-./tools/ctfctl state technique "..." failed --evidence LOG-000002
-./tools/ctfctl state next "..."
-./tools/ctfctl evidence add --source LOG-000001 --observation "..." --meaning "..."
-```
-
-### Agents
-
-```bash
-./tools/ctfctl handoff ctf-agent-web \
-  --objective "Map HTTP routes" \
-  --input state.yaml \
-  --constraint "Stay in scope"
-
-./tools/ctfctl merge-result reports/result-web.json
-```
-
-### Flags
-
-```bash
-./tools/ctfctl flag detect
-./tools/ctfctl flag candidate --value 'flag{...}' --source LOG-000101
-./tools/ctfctl flag verify --replay 'python3 scripts/solve.py' --runs 2
-./tools/ctfctl flag submit --url https://ctfd.example/api/v1/flags --challenge-id 12
-```
-
-Submission is dry-run by default. Add `--yes` only when event rules and `.scope.yaml` explicitly allow automatic submission. A persistent `no_auto_submit` constraint blocks submission until the operator explicitly approves removing it.
-
-## Claude Code and Codex
-
-Generate project agent files:
-
-```bash
-./tools/ctfctl sync-agents
-```
-
-Install Codex skills into `~/.codex/skills`:
-
-```bash
-./tools/ctfctl sync-agents --install-codex
-```
-
-Claude Code reads `CLAUDE.md`, which is a symlink to `AGENTS.md`. Specialist definitions are under `.claude/agents/`. Codex uses the root `AGENTS.md` and skills generated under `.codex/skills/`.
-
-## Optimization roadmap
-
-The implementation plan for runtime hardening, concurrency safety, evidence validation,
-execution policy, specialist merge idempotency, HTTP sessions, and future performance
-work is maintained in [`docs/OPTIMIZATION_PLAN.md`](docs/OPTIMIZATION_PLAN.md).
-
-The document is an implementation contract for delegated AI developers. It defines
-work ownership, non-goals, acceptance criteria, security constraints, test matrix,
-and the required delivery format.
-
-## Capability roadmap
-
-Phase 2 turns the runtime into an efficient, high-capability autonomous CTF solver:
-structured Kali-tool adapters, a solve loop, a reproducible capability benchmark,
-CTFd/platform bridge, trajectory export, parallel racing, sandboxed execution, and a
-cross-challenge knowledge ledger. The implementation contract is in
-[`docs/CAPABILITY_PLAN.md`](docs/CAPABILITY_PLAN.md); the shipped capability layer is
-documented in [`docs/SOLVER_ARCHITECTURE.md`](docs/SOLVER_ARCHITECTURE.md). A third-party
-positioning and open-source review is in [`docs/OPENSOURCE_REVIEW.md`](docs/OPENSOURCE_REVIEW.md).
 
 ## Development
 
 ```bash
-make test
-make bench        # capability benchmark on the self-contained synthetic suite
-make demo         # end-to-end demo (no model API required)
-make scan-secrets # scan git history for high-signal secret patterns
+make dev             # create .venv with dev dependencies
+make check           # tests + ruff + mypy + coverage (gate >= 80%)
+make bench           # capability benchmark (script driver)
+make demo            # end-to-end demo
+make scan-secrets    # scan git history for high-signal secret patterns
 ```
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the contribution workflow and
-[`SECURITY.md`](SECURITY.md) for responsible disclosure.
+[`SECURITY.md`](SECURITY.md) for responsible disclosure. This project is licensed under the
+[MIT License](LICENSE).
 
+## Documents
 
-## Design goals
-
-- **Capability:** specialist agents, structured tool adapters, and Ghidra/Pwntools-friendly workflows.
-- **Efficiency:** command caching, compact state, structured summaries, and deliberate escalation.
-- **Auditability:** command metadata, stdout/stderr, hashes, evidence ledger, and event history.
-- **Safety:** authorization mode, explicit target scope, dry-run submission, and stop-and-ask rules.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — process layer (v0.4.1 contract)
+- [`docs/SOLVER_ARCHITECTURE.md`](docs/SOLVER_ARCHITECTURE.md) — capability layer
+- [`docs/TOOL_ROUTING.md`](docs/TOOL_ROUTING.md) — Kali tool routing + adapter coverage
+- [`docs/CAPABILITY_PLAN.md`](docs/CAPABILITY_PLAN.md) — engineering roadmap & status
+- [`docs/OPENSOURCE_REVIEW.md`](docs/OPENSOURCE_REVIEW.md) — third-party positioning review
+- [`CHANGELOG.md`](CHANGELOG.md)

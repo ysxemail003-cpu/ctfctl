@@ -2,135 +2,77 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] - capability phase (Batch 1h: Phase E parallel racing)
+## [0.5.0] - 2026-09-09 (capability layer: Phase A-E + open-source prep)
 
-### Added
-- `ctfctl race --backends codex,claude,gemini` (or `auto`): races multiple model backends on one
-  challenge; each worker keeps independent rounds under `agent_rounds/<backend>/`, the first SOLVED
-  wins, the rest are cancelled between rounds; `agent_rounds/race-summary.json` records per-backend
-  results. Actions from different workers serialize on the challenge runtime lock.
-- `ctfctl bench --parallel N`: runs suite challenges concurrently (same evidence/scope guarantees).
-- `solver.run_solve` supports `rounds_subdir` and a `stop_event` (cancellation) for worker use.
-- Runtime lock hardening (`runtime_lock.py`): replaced the per-entry RLock with an owner-thread +
-  polling model and close-on-release fd lifecycle, making the lock safe for concurrent *threads* on
-  the same challenge while preserving cross-process flock exclusion (regression: multi-thread
-  racing used to deadlock/raise after 30s).
+### Summary
 
-### Fixed
-- `race` parser was silently not registered in cli.py (now asserted + tested).
+- **Phase A** — structured Kali-tool adapters: crypto (hashid + john/hashcat crack),
+  forensics (exif / binwalk / archive / zsteg / pcap), web (ffuf + evidence-gated sqlmap),
+  pwn/rev (ROPgadget / readelf imports).
+- **Phase B** — autonomous solve loop (`ctfctl solve`) with per-category playbooks, round
+  recording under `agent_rounds/`, strict JSON action contract, and model backends
+  (codex / claude / gemini).
+- **Phase C** — capability benchmark (`ctfctl bench`): 12-challenge offline synthetic suite
+  (every category easy + medium), script and solver drivers, metrics, committed baselines.
+- **Phase D** — platform bridge (`ctfctl platform ctfd list|pull`, token from env, host-locked
+  downloads, `no_auto_submit` workspaces) and trajectory export (`ctfctl trajectory export`,
+  CSAW-style JSON + Markdown).
+- **Phase E** — parallel racing (`ctfctl race`, first SOLVED wins), `ctfctl bench --parallel N`,
+  and a rewritten runtime lock that is safe for concurrent threads and processes.
+- **Open-source prep** — MIT license, bilingual README, CONTRIBUTING / SECURITY, `make demo`,
+  git-history secret scan.
 
+### Batch notes
 
+#### Batch 1a (Phase A1/A2) — crypto + forensics adapters
 
-### Added
-- Platform bridge (`ctf_agent/platform.py` + `ctfctl platform ctfd list|pull`): `NormalizedChallenge`
-  abstraction and a minimal CTFd v1 JSON client over stdlib urllib (no new deps). Token read from
-  environment only (never written to disk); attachment downloads are host-locked (no SSRF);
-  `pull` creates AI_NATIVE workspaces with a persistent `no_auto_submit` constraint and imports
-  attachments via the normal ingest path. Submission stays behind existing `flag submit` gates.
-- Trajectory export (`ctf_agent/trajectory.py` + `ctfctl trajectory export`): aggregates logged
-  actions, evidence ledger, agent rounds and flag record into a CSAW-style machine-readable
-  `reports/trajectory-<name>.json` plus a Markdown sidecar. Only already-redacted stored data is used.
-- Tests: mock-CTFd integration (list/detail/download/submit, cross-host refusal, workspace pull +
-  idempotency) and trajectory aggregation (actions/evidence/rounds/flag, persisted outputs).
+- `ctfctl tool hashid` (offline shape heuristic + hashid enrichment with shape-aware
+  suggestion) and `ctfctl tool crack` (local john/hashcat, wordlist required, argv validation).
+- `ctfctl tool exif | binwalk | archive | zsteg | pcap` with read-only defaults; binwalk
+  extraction lands in `work/extracted/`; zsteg crashes reported as `status=error`.
+- `doctor` reports the new tool set; adapter coverage table in `docs/TOOL_ROUTING.md`.
 
+#### Batch 1b (Phase A3/A4) — web + pwn/rev adapters
 
+- `ctfctl tool ffuf` (FUZZ position required, request budget committed before execution) and
+  `ctfctl tool sqlmap` (read-only argv builder, evidence gate unless `--force`).
+- `ctfctl tool rop` (structured ROPgadget) and `ctfctl tool imports` (readelf dyn-syms).
 
-### Added
-- 6 new original medium challenges (one per category), giving every category an easy + medium:
-  crypto/repeat-xor (known-prefix key recovery), forensics/dns-exfil (pcap DNS query),
-  web/login-flag (GET hint -> POST /login, local target server login mode), pwn/bof-win
-  (stack overflow with offset search), rev/data-xor (XOR blob inside ELF), misc/layered
-  (gzip > zip > ROT13).
-- Benchmark target server gains a `login` mode (`server`/`server_creds` manifest fields):
-  GET / returns a hint, POST /login with valid creds returns the flag header.
-- `bench/RESULTS.md` baseline 2: 12/12 SOLVED in ≈ 9 s.
+#### Batch 1c (Phase C v1) — benchmark harness
 
-### Changed
-- crypto/rsa-tiny removed during development: a message longer than the tiny modulus is not
-  recoverable, so the design was replaced with repeating-key XOR (see baseline history).
+- `ctfctl bench`: manifest discovery, isolated AI_NATIVE workspaces, ingest of original/,
+  local target server for web challenges, deterministic `FLAG=` drivers, missing-tool SKIPPED.
+- First 6-challenge suite and `bench/RESULTS.md` baseline 1 (6/6 SOLVED ~6s).
 
+#### Batch 1d (Phase B skeleton) — solve loop + backends
 
+- `ctfctl solve` round loop, `agent_rounds/`, ScriptedPolicy + BackendPolicy, flag detection
+  and canonical flag-candidate recording, stop conditions (solved / stuck / idle / max rounds).
 
-### Added
-- `ctfctl bench --driver solver --backend auto` runs each challenge through the solve-loop
-  engine (Phase B) instead of the bundled `solve.py`; per-challenge results add `rounds` and map
-  SOLVED/STUCK to bench SOLVED/FAILED; unsupported model CLIs fail fast at CLI start.
-- Missing backend/policy inside the harness yields SKIPPED (harness-tolerant for tests).
-- `solver.run_solve`/`compose_round_prompt` accept `extra_context` (used to inject the local
-  target URL for web challenges into every round prompt).
+#### Batch 1e (Phase B/C integration) — bench solver driver
 
+- `ctfctl bench --driver solver --backend auto` runs the solve-loop engine per challenge;
+  `solver.run_solve` gained `extra_context` (web target URL injection).
 
+#### Batch 1f (Phase C v2) — suite expansion
 
-### Added
-- Model backends (`ctf_agent/backends.py`): uniform `complete(prompt)` over codex (`codex exec -o`),
-  claude (`claude -p`), gemini (`gemini -p`); PATH detection, clear missing-CLI errors, `auto`
-  preference order; no live model calls in tests.
-- Solve-loop engine (`ctf_agent/solver.py` + `ctfctl solve`): PLAN-less round loop
-  (round = prompt -> policy JSON action -> execute `ctfctl run|tool` actions -> record), with
-  static per-category playbook injection (skill injection), round recording under
-  `<challenge>/agent_rounds/round-<NN>/` (prompt.md/response.json/record.json), flag detection in
-  action output or model `flag_candidate`, canonical flag-candidate recording, and stop conditions:
-  solved flag, policy `conclusion: stuck`, two idle rounds without new evidence, or `max_rounds`.
-- Policies: `ScriptedPolicy` (deterministic tests/replays) and `BackendPolicy` (strict JSON action
-  object parsing with one tolerated bad reply).
+- 6 new original medium challenges (one per category); target server `login` mode;
+  `bench/RESULTS.md` baseline 2 (12/12 SOLVED ~9s). crypto/rsa-tiny removed during dev
+  (plaintext longer than modulus is unrecoverable) and replaced with repeating-key XOR.
 
-### Tested
-- 17 backend/solver tests (argv builders, availability errors, JSON extraction, solved via output
-  flag, solved via candidate, stuck on idle/conclusion/invalid replies, event + flag-candidate
-  recording). `make check`: ruff/mypy clean.
+#### Batch 1g (Phase D) — platform bridge + trajectory
 
+- CTFd v1 client over stdlib urllib, host-locked attachment downloads, pull semantics;
+  trajectory aggregation (actions / evidence / agent rounds / flag).
 
+#### Batch 1h (Phase E) — parallel racing + lock safety
 
-### Added
-- Capability benchmark harness (`ctf_agent/bench.py` + `ctfctl bench`): discovers
-  `challenge.json` manifests, creates an isolated AI_NATIVE workspace per run, imports
-  `original/*` through the normal ingest path, starts a local target server for web-style
-  challenges, executes a deterministic `solve.py` driver under timeout, and writes
-  `summary.json` / `failure_modes.json` / `REPORT.md` under `bench/results/<date>/`.
-- Missing required tools are reported as SKIPPED (not FAILED) so the suite can run on
-  minimal CI images; drivers report via a `FLAG=` line; per-challenge `actions` counts
-  logged command records.
-- Synthetic suite v1 (`bench/challenges/`): 6 original easy challenges, one per category —
-  crypto/hash-crack (john), forensics/hidden-zip (binwalk carve), web/http-header (local
-  target server), pwn/argv-gate (strings + run), rev/xor-file, misc/rot-multi.
-- `make bench` target; `bench/RESULTS.md` baseline 1 (6/6 SOLVED ≈ 6 s).
+- `ctfctl race`, independent per-backend rounds, first SOLVED wins, others cancelled.
+- `ctfctl bench --parallel N`.
+- runtime lock rewritten: owner-thread + polling model, fd closed on release so forked
+  children never share an open file description (concurrent threads and processes both safe).
 
-
-
-### Added
-- Web adapters (`ctf_agent/adapters/web.py`): `ctfctl tool ffuf` (scope-checked, FUZZ-position
-  required, wordlist mandatory, request budget committed *before* execution so over-budget runs
-  are refused) and `ctfctl tool sqlmap` (read-only argv builder with hard caps level≤3/risk≤2 and
-  no destructive flags; execution requires a resolvable `--evidence` reference unless `--force`).
-- Pwn/rev helpers (`ctf_agent/adapters/pwn.py`): `ctfctl tool rop` (structured ROPgadget gadgets,
-  `--only`/`--depth`/`--max-gadgets`) and `ctfctl tool imports` (readelf `--dyn-syms` UND imports).
-- 16 new adapter + CLI tests (sqlmap argv invariants, ffuf validation/scope/end-to-end on a local
-  HTTP server, ROP/imports parsing, evidence-gate behavior).
-
-### Tested
-- `make check`: ruff/mypy clean; overall coverage >= 80%; adapter modules >= 80%.
-
-
-
-### Added
-- Crypto adapters (`ctf_agent/adapters/crypto.py`): `ctfctl tool hashid` (offline shape heuristic +
-  `hashid` enrichment with MD5-over-MD2 style preference), `ctfctl tool crack` (local john/hashcat
-  cracking; wordlist required; hash argv validated against injection; artifacts under `work/hashes/`).
-- Forensics adapters (`ctf_agent/adapters/forensics.py`): `ctfctl tool exif`, `binwalk`
-  (scan; `--extract` lands in `work/extracted/`), `archive` (7z listing), `zsteg` (tool crashes
-  reported as `status=error`, not a hard failure), `pcap` (capinfos + tshark protocol hierarchy).
-- `ctfctl doctor` now reports hashid/john/hashcat/exiftool/binwalk/7z/unzip/zsteg/tshark/capinfos.
-- Adapter coverage table in `docs/TOOL_ROUTING.md`.
-
-### Changed
-- None (additive CLI/subcommands only; existing commands unchanged).
-
-### Tested
-- 21 new adapter tests (hash shape, argument safety, hashid parsing, john cracked/not-cracked,
-  exif, binwalk scan/extract, 7z listing/rejection, zsteg clean/error, pcap summary). hashcat
-  end-to-end is opt-in via `CTF_TEST_HASHCAT=1` (slow OpenCL startup).
-
-
+## [0.4.1] - 2026-09-09 (optimization batch 4)
 
 ### Added
 - Task leases (`ctf_agent/tasks.py`, Phase 3 Task C): `start_task` /

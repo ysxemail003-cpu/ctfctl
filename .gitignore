@@ -19,3 +19,8 @@ workspace/current.yaml
 # core dumps
 core.*
 *.core
+
+# coverage
+.coverage
+.coverage.*
+htmlcov/

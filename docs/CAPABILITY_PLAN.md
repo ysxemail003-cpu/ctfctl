@@ -615,4 +615,23 @@ Batch 1 完成前不启动 E（racing）、F（沙箱）、D 的自动领题，�
 > 每批完成后在此追加：完成内容 / 提交点（可回滚）/ 未完成与残余风险 / bench 指标变化。
 > 本文件是活文档；阶段全部完成后，最终报告另存 `docs/CAPABILITY_REPORT.md`。
 
-（暂无记录——本方案书刚落位，不代表上述代码任务已实施。）
+### 批次 1a（Phase A1/A2 工具适配器，2026-09-09）
+
+> 完成 Phase A1（密码类）与 A2（取证类）的离线 adapter 扩容；Phase A3/A4、B/C 后续批次。
+
+- 新增 `ctf_agent/adapters/crypto.py`：`tool hashid`（本地形状启发 + hashid 富化，按形状偏好选
+  suggested）、`tool crack`（john/hashcat 本地破解，强制 wordlist；argv 哈希字符集校验防注入；
+  pot/hash 文件落 `work/hashes/`）。
+- 新增 `ctf_agent/adapters/forensics.py`：`tool exif`、`tool binwalk`（`--extract` 仅落
+  `work/extracted/`）、`tool archive`（7z `-slt`）、`tool zsteg`（工具崩溃 → `status=error`
+  而非硬失败）、`tool pcap`（capinfos + tshark 协议层级）。
+- CLI/doctor/TOOL_ROUTING 覆盖表已更新；21 个 adapter 测试新增（hashcat 端到端以
+  `CTF_TEST_HASHCAT=1` 显式开启，默认跳过因其 OpenCL 启动约 20s）。
+- 提交点：`<见 git log：Phase A1/A2 提交>`。
+- 残余风险：hashcat 成功路径默认不在 `make check` 内；binwalk 提取耗时用例约 3–5s；
+  zsteg 对病态图片仍可能产生非零退出（已优雅上报）；A3/A4（ffuf/sqlmap/ROPgadget 等）未开始。
+
+### 批次 1b+（规划中）
+
+- Phase A3/A4（web/pwn 辅助 adapter）→ Phase B 求解循环骨架 → Phase C 合成题集 + `ctfctl bench`。
+

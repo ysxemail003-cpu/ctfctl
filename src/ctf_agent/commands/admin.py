@@ -26,6 +26,16 @@ def doctor(json_output: bool = False) -> dict[str, Any]:
         "ROPgadget",
         "sqlmap",
         "burpsuite",
+        "hashid",
+        "john",
+        "hashcat",
+        "exiftool",
+        "binwalk",
+        "7z",
+        "unzip",
+        "zsteg",
+        "tshark",
+        "capinfos",
     ]
     tool_status = {name: shutil.which(name) for name in tools}
     try:

@@ -2,7 +2,27 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [0.4.1] - 2026-09-09 (optimization batch 4)
+## [Unreleased] - capability phase (Batch 1a: Phase A1/A2 tool adapters)
+
+### Added
+- Crypto adapters (`ctf_agent/adapters/crypto.py`): `ctfctl tool hashid` (offline shape heuristic +
+  `hashid` enrichment with MD5-over-MD2 style preference), `ctfctl tool crack` (local john/hashcat
+  cracking; wordlist required; hash argv validated against injection; artifacts under `work/hashes/`).
+- Forensics adapters (`ctf_agent/adapters/forensics.py`): `ctfctl tool exif`, `binwalk`
+  (scan; `--extract` lands in `work/extracted/`), `archive` (7z listing), `zsteg` (tool crashes
+  reported as `status=error`, not a hard failure), `pcap` (capinfos + tshark protocol hierarchy).
+- `ctfctl doctor` now reports hashid/john/hashcat/exiftool/binwalk/7z/unzip/zsteg/tshark/capinfos.
+- Adapter coverage table in `docs/TOOL_ROUTING.md`.
+
+### Changed
+- None (additive CLI/subcommands only; existing commands unchanged).
+
+### Tested
+- 21 new adapter tests (hash shape, argument safety, hashid parsing, john cracked/not-cracked,
+  exif, binwalk scan/extract, 7z listing/rejection, zsteg clean/error, pcap summary). hashcat
+  end-to-end is opt-in via `CTF_TEST_HASHCAT=1` (slow OpenCL startup).
+
+
 
 ### Added
 - Task leases (`ctf_agent/tasks.py`, Phase 3 Task C): `start_task` /

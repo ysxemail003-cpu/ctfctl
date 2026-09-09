@@ -1,7 +1,9 @@
-"""tool adapter commands (http, http-session, nmap, web-inventory, file, elf, ghidra)."""
+"""tool adapter commands (http, http-session, nmap, web-inventory, file, elf, ghidra, crypto, forensics)."""
 from __future__ import annotations
 
+from ..adapters import crypto as crypto_adapter
 from ..adapters import elf as elf_adapter
+from ..adapters import forensics as forensics_adapter
 from ..adapters import ghidra as ghidra_adapter
 from ..adapters import http as http_adapter
 from ..adapters import nmap as nmap_adapter
@@ -55,6 +57,38 @@ def _handle_tool(args) -> int:
         return 0
     if args.tool_command == "ghidra":
         json_print(ghidra_adapter.export(challenge_dir, args.binary, args.force, args.timeout))
+        return 0
+    if args.tool_command == "hashid":
+        json_print(crypto_adapter.identify_hash(challenge_dir, args.value, args.timeout))
+        return 0
+    if args.tool_command == "crack":
+        json_print(
+            crypto_adapter.crack_hash(
+                challenge_dir,
+                value=args.value,
+                hash_file=args.hash_file,
+                wordlist=args.wordlist,
+                tool=args.tool,
+                timeout=args.timeout,
+                format_hint=args.format_hint,
+                mode=args.mode,
+            )
+        )
+        return 0
+    if args.tool_command == "exif":
+        json_print(forensics_adapter.exif(challenge_dir, args.path, args.timeout))
+        return 0
+    if args.tool_command == "binwalk":
+        json_print(forensics_adapter.binwalk_scan(challenge_dir, args.path, args.extract, args.timeout))
+        return 0
+    if args.tool_command == "archive":
+        json_print(forensics_adapter.archive_list(challenge_dir, args.path, args.timeout))
+        return 0
+    if args.tool_command == "zsteg":
+        json_print(forensics_adapter.zsteg_detect(challenge_dir, args.path, args.timeout))
+        return 0
+    if args.tool_command == "pcap":
+        json_print(forensics_adapter.pcap_summary(challenge_dir, args.path, args.timeout))
         return 0
     raise CTFError(f"Unhandled command: {args.root_command}")
 

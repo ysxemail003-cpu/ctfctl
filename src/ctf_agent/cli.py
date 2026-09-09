@@ -167,6 +167,47 @@ def build_parser() -> argparse.ArgumentParser:
     ghidra.add_argument("--force", action="store_true")
     ghidra.add_argument("--timeout", type=float, default=600.0)
 
+    hashid = tool_sub.add_parser("hashid", help="Identify a hash (local shape heuristic + hashid)")
+    add_challenge_dir(hashid)
+    hashid.add_argument("value")
+    hashid.add_argument("--timeout", type=float, default=30.0)
+
+    crack = tool_sub.add_parser("crack", help="Crack a local hash with john (default) or hashcat; wordlist required")
+    add_challenge_dir(crack)
+    crack.add_argument("value", nargs="?", default=None, help="Hash string to crack")
+    crack.add_argument("--hash-file", type=Path, default=None, help="John-style hash file instead of --value")
+    crack.add_argument("--wordlist", type=Path, required=True, help="Wordlist file (absolute or challenge-relative)")
+    crack.add_argument("--tool", choices=["john", "hashcat"], default="john")
+    crack.add_argument("--format", dest="format_hint", default=None, help="john --format hint (default: inferred)")
+    crack.add_argument("--mode", type=int, default=None, help="hashcat mode (required when not inferable)")
+    crack.add_argument("--timeout", type=float, default=600.0)
+
+    exif_tool = tool_sub.add_parser("exif", help="EXIF/metadata tags via exiftool (read-only)")
+    add_challenge_dir(exif_tool)
+    exif_tool.add_argument("path", type=Path)
+    exif_tool.add_argument("--timeout", type=float, default=60.0)
+
+    binwalk_tool = tool_sub.add_parser("binwalk", help="Scan for embedded signatures (binwalk); extraction is explicit")
+    add_challenge_dir(binwalk_tool)
+    binwalk_tool.add_argument("path", type=Path)
+    binwalk_tool.add_argument("--extract", action="store_true", help="Extract to work/extracted/<name>/")
+    binwalk_tool.add_argument("--timeout", type=float, default=120.0)
+
+    archive_tool = tool_sub.add_parser("archive", help="List archive members via 7z (read-only)")
+    add_challenge_dir(archive_tool)
+    archive_tool.add_argument("path", type=Path)
+    archive_tool.add_argument("--timeout", type=float, default=60.0)
+
+    zsteg_tool = tool_sub.add_parser("zsteg", help="Detect LSB/extradata stego in PNG/BMP (zsteg)")
+    add_challenge_dir(zsteg_tool)
+    zsteg_tool.add_argument("path", type=Path)
+    zsteg_tool.add_argument("--timeout", type=float, default=120.0)
+
+    pcap_tool = tool_sub.add_parser("pcap", help="Summarize a pcap (capinfos + tshark protocol hierarchy)")
+    add_challenge_dir(pcap_tool)
+    pcap_tool.add_argument("path", type=Path)
+    pcap_tool.add_argument("--timeout", type=float, default=120.0)
+
     # state
     state = subparsers.add_parser("state", help="Inspect or update canonical state")
     add_challenge_dir(state)

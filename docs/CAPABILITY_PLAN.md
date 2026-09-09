@@ -702,9 +702,26 @@ Batch 1 完成前不启动 E（racing）、F（沙箱）、D 的自动领题，�
 - 提交点：`<见 git log：Phase B/C 打通提交>`。
 - 残余/待办：suite v2（每类 ≥2、含 medium）与 Phase D/E 未开始。
 
-### 批次 1f（规划中）
+### 批次 1f（suite v2 扩容，2026-09-09）
 
-- suite v2 扩容（每类 ≥2、含 medium）→ Phase D（平台桥 + trajectory 导出）→ Phase E（并行竞速）。
+> Phase C 任务 C1 达成：每类 ≥2 题、含 medium。当前 12 题脚本基线 12/12 SOLVED（≈9s）。
+
+- 新增 6 道原创 medium（每类 1 道）：crypto/repeat-xor（已知前缀恢复短重复密钥）、
+  forensics/dns-exfil（pcap DNS 查询名，自建 pcap fixture）、web/login-flag（GET / 提示 →
+  POST /login，本地靶标服务器新增 login 模式 + `server/server_creds` manifest 字段）、
+  pwn/bof-win（栈溢出改 win，exploit 用 padding 范围搜索对编译器布局鲁棒）、rev/data-xor
+  （ELF .rodata 内 XOR blob，strings 不可见）、misc/layered（gzip>zip>ROT13）。
+- 开发中淘汰 crypto/rsa-tiny：明文长于小模数时信息不可恢复（教科书式硬伤），改为 repeat-xor；
+  已在 CHANGELOG 如实记录。
+- `bench/RESULTS.md` 基线 2 登记（12 行明细）；Growth rules 更新为 suite v3 目标。
+- 提交点：`<见 git log：suite v2 提交>`。
+- 残余/待办：真实 LLM 基线（`--driver solver`）仍未跑（待 operator）；suite v3（hard/网络模糊/
+  深逆向）与 Phase D/E 未开始。
+
+### 批次 1g（规划中）
+
+- Phase D：平台桥（CTFd pull/同步，mock 全链路测试）+ `trajectory export`（CSAW 风格轨迹）→
+  Phase E（并行竞速）。
 
 
 

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "repeat-xor",
+  "category": "crypto",
+  "difficulty": "medium",
+  "title": "Repeating-Key XOR",
+  "description": "The flag is XORed with a short repeating key. Use the known 'flag{' prefix to recover the key and decrypt.",
+  "flag": "flag{repeating_xor}",
+  "driver": "script",
+  "solve": "solve.py",
+  "requires": [],
+  "target": false,
+  "server": "header",
+  "server_creds": {},
+  "files": [
+    "cipher.hex"
+  ]
+}

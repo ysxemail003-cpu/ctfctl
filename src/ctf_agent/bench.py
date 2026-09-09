@@ -34,6 +34,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs
 
 from . import solver as solver_module
 from .adapters import ingest as ingest_adapter
@@ -65,6 +66,8 @@ class BenchChallenge:
     target: bool
     root: Path
     files: list[str] = field(default_factory=list)
+    server: str = "header"
+    server_creds: dict[str, str] = field(default_factory=dict)
 
 
 def discover_suite(suite_dir: Path) -> list[BenchChallenge]:
@@ -97,6 +100,8 @@ def discover_suite(suite_dir: Path) -> list[BenchChallenge]:
                 target=bool(data.get("target", False)),
                 root=root,
                 files=[str(item) for item in data.get("files", [])],
+                server=str(data.get("server", "header")),
+                server_creds=dict(data.get("server_creds") or {}),
             )
         )
     if not challenges:
@@ -109,11 +114,31 @@ def _missing_requires(challenge: BenchChallenge) -> list[str]:
 
 
 class _BenchTargetHandler(http.server.BaseHTTPRequestHandler):
-    """Serves the flag in a response header for web-style challenges."""
+    """Local target for web challenges: header mode or login mode.
+
+    - ``header``: every GET returns ``X-Bench-Flag``.
+    - ``login``: GET / returns an HTML hint; POST /login with valid creds
+      returns ``X-Bench-Flag``, otherwise 403.
+    """
 
     flag = ""
+    mode = "header"
+    creds: dict[str, str] = {}
+
+    def _send(self, body: bytes, status: int = 200) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def do_GET(self):  # noqa: N802
+        if self.mode == "login" and self.path == "/":
+            hint = "<!-- hint: POST /login with user=admin&pass=hunter2 -->"
+            self._send(("<html><body><form method='post' action='/login'>"
+                        "<input name='user'><input name='pass' type='password'></form>"
+                        f"<!-- password: hunter2 -->{hint}</body></html>").encode())
+            return
         body = b"bench target"
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
@@ -122,22 +147,50 @@ class _BenchTargetHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_POST(self):  # noqa: N802
+        if self.mode != "login" or self.path != "/login":
+            self._send(b"not found", status=404)
+            return
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            form = parse_qs(self.rfile.read(length).decode(errors="replace"))
+        except Exception:
+            self._send(b"bad request", status=400)
+            return
+        user = (form.get("user") or [""])[0]
+        password = (form.get("pass") or [""])[0]
+        if user == self.creds.get("username") and password == self.creds.get("password"):
+            body = b"welcome"
+            self.send_response(200)
+            self.send_header("X-Bench-Flag", self.flag)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self._send(b"denied", status=403)
+
     def log_message(self, *args):  # noqa: N802
         pass
 
 
-def start_target_server(flag: str) -> tuple[str, int, Any]:
-    """Start a local flag-header HTTP server on 127.0.0.1; returns (host, port, stop)."""
+def start_target_server(
+    flag: str,
+    server: str = "header",
+    creds: dict[str, str] | None = None,
+) -> tuple[str, int, Any]:
+    """Start a local benchmark target server on 127.0.0.1; returns (host, port, stop)."""
     _BenchTargetHandler.flag = flag
-    server = socketserver.TCPServer(("127.0.0.1", 0), _BenchTargetHandler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    _BenchTargetHandler.mode = server if server in ("header", "login") else "header"
+    _BenchTargetHandler.creds = dict(creds or {})
+    httpd = socketserver.TCPServer(("127.0.0.1", 0), _BenchTargetHandler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
 
     def stop() -> None:
-        server.shutdown()
-        server.server_close()
+        httpd.shutdown()
+        httpd.server_close()
 
-    return "127.0.0.1", int(server.server_address[1]), stop
+    return "127.0.0.1", int(httpd.server_address[1]), stop
 
 
 def _parse_flag(output: str) -> str | None:
@@ -187,7 +240,9 @@ def run_challenge(
     target_url: str | None = None
     target_port: int | None = None
     if challenge.target:
-        host, target_port, stop_server = start_target_server(challenge.flag)
+        host, target_port, stop_server = start_target_server(
+            challenge.flag, server=challenge.server, creds=challenge.server_creds
+        )
         target_url = f"http://{host}:{target_port}/"
 
     workspace_root = out_dir / "work"

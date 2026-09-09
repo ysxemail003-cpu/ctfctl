@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "login-flag",
+  "category": "web",
+  "difficulty": "medium",
+  "title": "Login with a Hinted Password",
+  "description": "GET / shows a hint; POST /login with the right credentials returns the flag header.",
+  "flag": "flag{web_login_hunter2}",
+  "driver": "script",
+  "solve": "solve.py",
+  "requires": [],
+  "target": true,
+  "server": "login",
+  "server_creds": {
+    "username": "admin",
+    "password": "hunter2"
+  },
+  "files": []
+}

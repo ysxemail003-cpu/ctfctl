@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "dns-exfil",
+  "category": "forensics",
+  "difficulty": "medium",
+  "title": "DNS Exfiltration",
+  "description": "A DNS query in the pcap leaks the flag as a subdomain label.",
+  "flag": "flag{dns_exfil}",
+  "driver": "script",
+  "solve": "solve.py",
+  "requires": [],
+  "target": false,
+  "server": "header",
+  "server_creds": {},
+  "files": [
+    "capture.pcap"
+  ]
+}

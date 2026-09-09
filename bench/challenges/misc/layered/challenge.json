@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "layered",
+  "category": "misc",
+  "difficulty": "medium",
+  "title": "GZip > Zip > ROT13",
+  "description": "Unwrap the layers: gzip, then zip, then ROT13.",
+  "flag": "flag{misc_layered_zip}",
+  "driver": "script",
+  "solve": "solve.py",
+  "requires": [],
+  "target": false,
+  "server": "header",
+  "server_creds": {},
+  "files": []
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "data-xor",
+  "category": "rev",
+  "difficulty": "medium",
+  "title": "XOR Blob in ELF Data",
+  "description": "The flag is XORed with 0x11 and stored as a blob inside the ELF; strings alone will not reveal it.",
+  "flag": "flag{rev_data_xor}",
+  "driver": "script",
+  "solve": "solve.py",
+  "requires": [],
+  "target": false,
+  "server": "header",
+  "server_creds": {},
+  "files": [
+    "prog"
+  ]
+}

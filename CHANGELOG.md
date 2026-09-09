@@ -2,7 +2,23 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] - capability phase (Batch 1e: bench solver driver)
+## [Unreleased] - capability phase (Batch 1f: suite v2 expansion)
+
+### Added
+- 6 new original medium challenges (one per category), giving every category an easy + medium:
+  crypto/repeat-xor (known-prefix key recovery), forensics/dns-exfil (pcap DNS query),
+  web/login-flag (GET hint -> POST /login, local target server login mode), pwn/bof-win
+  (stack overflow with offset search), rev/data-xor (XOR blob inside ELF), misc/layered
+  (gzip > zip > ROT13).
+- Benchmark target server gains a `login` mode (`server`/`server_creds` manifest fields):
+  GET / returns a hint, POST /login with valid creds returns the flag header.
+- `bench/RESULTS.md` baseline 2: 12/12 SOLVED in ≈ 9 s.
+
+### Changed
+- crypto/rsa-tiny removed during development: a message longer than the tiny modulus is not
+  recoverable, so the design was replaced with repeating-key XOR (see baseline history).
+
+
 
 ### Added
 - `ctfctl bench --driver solver --backend auto` runs each challenge through the solve-loop

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "bof-win",
+  "category": "pwn",
+  "difficulty": "medium",
+  "title": "Stack Buffer Overflow to Win",
+  "description": "Overflow the stack buffer so the win variable becomes 0x1337.",
+  "flag": "flag{pwn_bof_win}",
+  "driver": "script",
+  "solve": "solve.py",
+  "requires": [],
+  "target": false,
+  "server": "header",
+  "server_creds": {},
+  "files": [
+    "vuln"
+  ]
+}

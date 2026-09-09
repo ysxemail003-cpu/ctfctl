@@ -238,3 +238,44 @@ def test_run_suite_solver_driver_with_policy(tmp_path: Path):
     )
     assert summary["counts"]["SOLVED"] == 1
     assert summary["counts"]["FAILED"] == 0
+
+
+
+def test_run_challenge_login_target_server(tmp_path: Path):
+    suite = tmp_path / "suite"
+    challenge_dir = suite / "web" / "login"
+    challenge_dir.mkdir(parents=True, exist_ok=True)
+    (challenge_dir / "challenge.json").write_text(
+        json.dumps({
+            "schema_version": 1,
+            "id": "login",
+            "category": "web",
+            "difficulty": "medium",
+            "title": "login",
+            "description": "",
+            "flag": "flag{login}",
+            "driver": "script",
+            "solve": "solve.py",
+            "requires": [],
+            "target": True,
+            "server": "login",
+            "server_creds": {"username": "admin", "password": "hunter2"},
+        }),
+        encoding="utf-8",
+    )
+    driver = (
+        "import urllib.request, urllib.parse, argparse\n"
+        "p = argparse.ArgumentParser()\n"
+        "p.add_argument('--challenge-dir'); p.add_argument('--root'); p.add_argument('--ctfctl')\n"
+        "p.add_argument('--target-url', required=True)\n"
+        "a = p.parse_args()\n"
+        "data = urllib.parse.urlencode({'user': 'admin', 'pass': 'hunter2'}).encode()\n"
+        "req = urllib.request.Request(a.target_url.rstrip('/') + '/login', data=data, method='POST')\n"
+        "resp = urllib.request.urlopen(req)\n"
+        "print('FLAG=' + resp.headers['X-Bench-Flag'])\n"
+    )
+    (challenge_dir / "solve.py").write_text(driver, encoding="utf-8")
+    challenge = bench_module.discover_suite(suite)[0]
+    result = bench_module.run_challenge(challenge, tmp_path / "out")
+    assert result["status"] == "SOLVED"
+    assert result["flag_matched"] is True

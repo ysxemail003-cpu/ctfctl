@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from .errors import CTFError
+from .policy import PolicyError, resolve_inside
+from .redaction import collect_secrets, redact_text
 from .runtime_lock import challenge_lock
 from .scope import ScopeStore, ensure_network_command_safe, validate_network_command
 from .state import StateStore
@@ -187,8 +189,13 @@ def run_command(
     with challenge_lock(challenge_dir, description=f"run_command:{tag}"):
         state = StateStore(challenge_dir)
         state.load()
-        if input_file is not None and not input_file.is_file():
-            raise CTFError(f"Input file not found: {input_file}")
+        if input_file is not None:
+            if not input_file.is_file():
+                raise CTFError(f"Input file not found: {input_file}")
+            try:
+                resolve_inside(challenge_dir, input_file)
+            except PolicyError as exc:
+                raise CTFError(f"Refusing external input file: {exc}") from exc
         scope = ScopeStore(challenge_dir)
         ensure_network_command_safe(command, network, target)
         scope_result = None
@@ -235,6 +242,8 @@ def run_command(
         env = os.environ.copy()
         if env_vars:
             env.update(env_vars)
+        secrets = collect_secrets(env)
+        redacted_command = [redact_text(item, secrets) for item in command]
         stdin_data = None
         if input_file is not None:
             stdin_data = input_file.read_bytes()
@@ -298,8 +307,8 @@ def run_command(
             "id": log_id,
             "tag": tag,
             "class": classification,
-            "command": command,
-            "command_display": shlex.join(command),
+            "command": redacted_command,
+            "command_display": shlex.join(redacted_command),
             "command_hash": hash_value,
             "cwd": cwd,
             "input_file": str(input_file) if input_file else None,
@@ -329,7 +338,7 @@ def run_command(
                 "log_id": log_id,
                 "tag": tag,
                 "class": classification,
-                "command": command,
+                "command": redacted_command,
                 "exit_code": returncode,
                 "stdout_file": metadata["stdout_file"],
                 "stderr_file": metadata["stderr_file"],

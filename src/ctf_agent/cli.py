@@ -252,6 +252,14 @@ def build_parser() -> argparse.ArgumentParser:
     flag_submit_parser.add_argument("--value")
     flag_submit_parser.add_argument("--yes", action="store_true", help="Actually submit; default is dry-run")
 
+    # logs: summary and archival
+    logs = subparsers.add_parser("logs", help="Inspect and archive challenge logs")
+    add_challenge_dir(logs)
+    logs_sub = logs.add_subparsers(dest="logs_command", required=True)
+    logs_sub.add_parser("summary", help="Summarize logs by tag/class and size")
+    logs_archive = logs_sub.add_parser("archive", help="Archive unreferenced logs into logs/archive/")
+    logs_archive.add_argument("--dry-run", action="store_true", help="Preview without moving files")
+
     # handoff / merge / report
     handoff_parser = subparsers.add_parser("handoff", help="Generate a specialist handoff")
     add_challenge_dir(handoff_parser)

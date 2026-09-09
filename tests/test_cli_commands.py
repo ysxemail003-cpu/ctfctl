@@ -282,3 +282,22 @@ def test_flag_submit_dry_run_via_cli(tmp_path: Path, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert '"dry_run": true' in out
+
+
+def test_logs_summary_and_archive(tmp_path: Path, capsys):
+    challenge = _init(tmp_path, "cli-logs")
+    rc = main(["-C", str(challenge), "run", "--tag", "one", "--quiet", "--", "printf", "a\n"])
+    assert rc == 0
+    rc = main(["-C", str(challenge), "run", "--tag", "two", "--quiet", "--", "printf", "b\n"])
+    assert rc == 0
+    rc = main(["-C", str(challenge), "logs", "summary"])
+    assert rc == 0
+    assert '"log_count": 2' in capsys.readouterr().out
+    rc = main(["-C", str(challenge), "logs", "archive", "--dry-run"])
+    assert rc == 0
+    assert '"dry_run": true' in capsys.readouterr().out
+    rc = main(["-C", str(challenge), "logs", "archive"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert '"moved_count": 2' in out
+    assert (challenge / "logs" / "archive").is_dir()

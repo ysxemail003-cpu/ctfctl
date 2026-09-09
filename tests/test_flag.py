@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from ctf_agent.challenge import init_challenge
 from ctf_agent.flag import candidate, detect, verify_replay
 from ctf_agent.state import StateStore
@@ -114,3 +116,34 @@ def test_submission_requires_reproduced_flag(tmp_path: Path):
         assert "reproduced" in str(exc)
     else:
         raise AssertionError("expected reproduction requirement")
+
+
+def test_verify_replay_validation_errors(tmp_path: Path):
+    from ctf_agent.errors import FlagError
+
+    challenge = init_challenge(tmp_path, "demo", "verify-errors", "misc", "AI_NATIVE", confirm_authorization=True)
+    with pytest.raises(FlagError):
+        verify_replay(challenge, "printf 'x'", runs=1)
+    with pytest.raises(FlagError):
+        verify_replay(challenge, "", runs=2)
+    candidate(challenge, "flag{no-match}", "manual")
+    counter_code = (
+        "import pathlib;"
+        "p=pathlib.Path('work/counter.txt');"
+        "n=int(p.read_text()) if p.exists() else 0;"
+        "p.write_text(str(n+1));"
+        "print('value-%d' % n)"
+    )
+    replay = "python3 -c " + '"' + counter_code + '"'
+    with pytest.raises(FlagError):
+        verify_replay(challenge, replay, runs=2)  # outputs differ between runs
+
+
+def test_submit_requires_candidate_value(tmp_path: Path):
+    from ctf_agent.errors import FlagError
+
+    challenge = init_challenge(tmp_path, "demo", "submit-none", "misc", "AI_NATIVE", confirm_authorization=True)
+    from ctf_agent.flag import submit
+
+    with pytest.raises(FlagError):
+        submit(challenge, "http://127.0.0.1:1/api", "CTFD_TOKEN", 1, yes=False)

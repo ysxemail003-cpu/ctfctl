@@ -10,9 +10,10 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .errors import CTFError
+from .records import EvidenceRecord
 from .runtime_lock import challenge_lock
 from .util import append_jsonl, atomic_write_text, next_id, utcnow
 
@@ -124,7 +125,7 @@ class EvidenceLedger:
         meaning: str,
         confidence: str = "HIGH",
         classification: str = "FACT",
-    ) -> dict[str, Any]:
+    ) -> EvidenceRecord:
         confidence = confidence.upper()
         classification = classification.upper()
         if confidence not in {"LOW", "MEDIUM", "HIGH"}:
@@ -143,7 +144,7 @@ class EvidenceLedger:
             }
             append_jsonl(self.path, record)
             self.render()
-        return record
+        return cast(EvidenceRecord, record)
 
     def records(self) -> list[dict[str, Any]]:
         if not self.path.is_file():

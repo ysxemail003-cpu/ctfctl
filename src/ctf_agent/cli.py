@@ -180,6 +180,14 @@ def build_parser() -> argparse.ArgumentParser:
     http.add_argument("--data")
     http.add_argument("--timeout", type=float, default=15.0)
     http.add_argument("--tag")
+    http.add_argument("--session", help="Session id; persists cookies under artifacts/http/sessions")
+    http_session = tool_sub.add_parser(
+        "http-session",
+        help="Inspect or replay a saved HTTP cookie session",
+    )
+    add_challenge_dir(http_session)
+    http_session.add_argument("action", choices=["show", "replay"])
+    http_session.add_argument("--session", required=True, help="Session id")
     elf = tool_sub.add_parser("elf", help="ELF/checksec/file/sha256 recon adapter")
     add_challenge_dir(elf)
     elf.add_argument("binary", type=Path)
@@ -612,8 +620,15 @@ def main(argv: list[str] | None = None) -> int:
                     data=args.data,
                     timeout=args.timeout,
                     tag=args.tag,
+                    session=getattr(args, "session", None),
                 )
                 json_print(result)
+                return 0
+            if args.tool_command == "http-session":
+                if args.action == "show":
+                    json_print(http_adapter.session_info(challenge_dir, args.session))
+                else:
+                    json_print(http_adapter.replay_session(challenge_dir, args.session))
                 return 0
             if args.tool_command == "nmap":
                 json_print(

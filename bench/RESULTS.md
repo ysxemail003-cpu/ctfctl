@@ -16,7 +16,8 @@ Artifacts land in `bench/results/<date>/run-<time>/`:
 `summary.json` (full per-challenge records), `failure_modes.json`, `REPORT.md`,
 plus each challenge's isolated workspace (`work/...`) with its own logs/evidence.
 
-Live (LLM) solver baseline — run by the operator when a model CLI is available:
+Live (LLM) solver baseline — OPTIONAL, does not block release. Run when a model
+CLI is available and you want a capability score:
 
 ```bash
 ./tools/ctfctl bench --driver solver --backend auto

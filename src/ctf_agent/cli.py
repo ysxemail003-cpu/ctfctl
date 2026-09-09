@@ -368,6 +368,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     bench.add_argument("--backend", choices=["auto", "codex", "claude", "gemini"], default="auto")
     bench.add_argument("--max-rounds", type=int, default=8)
+    bench.add_argument("--parallel", type=int, default=1, help="Run suite challenges concurrently")
 
     # solve loop
     solve = subparsers.add_parser("solve", help="Run the autonomous solve loop against the current challenge")
@@ -400,6 +401,14 @@ def build_parser() -> argparse.ArgumentParser:
     trajectory_sub = trajectory.add_subparsers(dest="trajectory_command", required=True)
     trajectory_export = trajectory_sub.add_parser("export", help="Write reports/trajectory-<name>.json and .md")
     add_challenge_dir(trajectory_export)
+
+    # race: multiple backends on one challenge
+    race = subparsers.add_parser("race", help="Race multiple model backends on one challenge (first SOLVED wins)")
+    add_challenge_dir(race)
+    race.add_argument("--backends", default="auto", help="Comma-separated codex,claude,gemini, or auto")
+    race.add_argument("--rounds", type=int, default=6, help="Per-backend max rounds")
+    race.add_argument("--action-timeout", type=float, default=120.0)
+    race.add_argument("--model-timeout", type=float, default=300.0)
 
     # sync agents
     sync = subparsers.add_parser("sync-agents", help="Generate Claude Code and Codex agent files")

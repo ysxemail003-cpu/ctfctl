@@ -279,3 +279,14 @@ def test_run_challenge_login_target_server(tmp_path: Path):
     result = bench_module.run_challenge(challenge, tmp_path / "out")
     assert result["status"] == "SOLVED"
     assert result["flag_matched"] is True
+
+
+
+def test_run_suite_parallel(tmp_path: Path):
+    suite = _suite(tmp_path)
+    for index in range(3):
+        _write_challenge(suite, f"p{index}", driver='print("FLAG=flag{test}")')
+    summary = bench_module.run_suite(suite_dir=suite, out_dir=tmp_path / "results", parallel=3)
+    assert summary["total"] == 3
+    assert summary["counts"]["SOLVED"] == 3
+    assert summary["counts"]["FAILED"] == 0

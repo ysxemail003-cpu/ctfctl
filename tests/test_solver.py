@@ -14,9 +14,8 @@ FLAG_REV = b"flag{xor_file_rev}"
 
 
 class FakeBackend:
-    name = "fake"
-
-    def __init__(self, replies: list[str]):
+    def __init__(self, replies: list[str], name: str = "fake"):
+        self.name = name
         self.replies = list(replies)
 
     def available(self) -> bool:
@@ -150,3 +149,60 @@ def test_compose_round_prompt_includes_extra_context(tmp_path: Path):
     prompt = solver_module.compose_round_prompt(challenge, 1, 3, [], extra_context="Target URL: http://127.0.0.1:9/")
     assert "EXTRA CONTEXT" in prompt
     assert "Target URL: http://127.0.0.1:9/" in prompt
+
+
+
+def _json_fake_backend(name: str, replies: list[dict]) -> FakeBackend:
+    return FakeBackend([json.dumps(reply) for reply in replies], name=name)
+
+
+def test_run_solve_rounds_subdir_and_cancel(tmp_path: Path):
+    import threading
+
+    challenge = _challenge(tmp_path, "solve-subdir")
+    policy = solver_module.ScriptedPolicy(
+        responses=[{"analysis": "xor the bytes", "commands": [["run", "--tag", "xor", "--", "python3", "-c", _xor_print_code()]], "flag_candidate": None, "conclusion": None}]
+    )
+    stop = threading.Event()
+    summary = solver_module.run_solve(challenge, policy=policy, max_rounds=3, rounds_subdir="racer-a", stop_event=stop)
+    assert summary.status == "SOLVED"
+    assert (challenge / "agent_rounds" / "racer-a" / "round-01" / "record.json").is_file()
+    assert (challenge / "agent_rounds" / "racer-a" / "summary.json").is_file()
+
+    # pre-set stop event -> worker cancels immediately
+    stop.set()
+    cancelled = solver_module.run_solve(challenge, policy=policy, max_rounds=3, rounds_subdir="racer-b", stop_event=stop)
+    assert cancelled.status == "CANCELLED"
+    assert "cancelled" in (cancelled.reason or "")
+
+
+def test_race_solve_first_solver_wins(tmp_path: Path):
+    challenge = _challenge(tmp_path, "race-win")
+    solved = {
+        "analysis": "xor the bytes",
+        "commands": [["run", "--tag", "xor", "--", "python3", "-c", _xor_print_code()]],
+        "flag_candidate": None,
+        "conclusion": None,
+    }
+    idle = {"analysis": "idle", "commands": [], "flag_candidate": None, "conclusion": None}
+    fast = _json_fake_backend("fast", [solved] * 3)
+    slow = _json_fake_backend("slow", [idle] * 9)
+    record = solver_module.race_solve(challenge, [fast, slow], per_worker_rounds=6)
+    assert record["status"] == "SOLVED"
+    assert record["winner_backend"] == "fast"
+    assert record["flag"] == FLAG_REV.decode()
+    assert len(record["per_backend"]) == 2
+    by_name = {item["backend"]: item for item in record["per_backend"]}
+    assert by_name["fast"]["status"] == "SOLVED"
+    assert by_name["slow"]["status"] in ("CANCELLED", "STUCK")
+    assert (challenge / "agent_rounds" / "race-summary.json").is_file()
+
+
+def test_race_solve_no_winner(tmp_path: Path):
+    challenge = _challenge(tmp_path, "race-lose")
+    idle = {"analysis": "idle", "commands": [], "flag_candidate": None, "conclusion": None}
+    a = _json_fake_backend("a", [idle] * 9)
+    b = _json_fake_backend("b", [idle] * 9)
+    record = solver_module.race_solve(challenge, [a, b], per_worker_rounds=2)
+    assert record["status"] == "STUCK"
+    assert record["winner_backend"] is None

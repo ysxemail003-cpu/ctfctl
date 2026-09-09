@@ -2,7 +2,24 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] - capability phase (Batch 1g: Phase D platform bridge + trajectory)
+## [Unreleased] - capability phase (Batch 1h: Phase E parallel racing)
+
+### Added
+- `ctfctl race --backends codex,claude,gemini` (or `auto`): races multiple model backends on one
+  challenge; each worker keeps independent rounds under `agent_rounds/<backend>/`, the first SOLVED
+  wins, the rest are cancelled between rounds; `agent_rounds/race-summary.json` records per-backend
+  results. Actions from different workers serialize on the challenge runtime lock.
+- `ctfctl bench --parallel N`: runs suite challenges concurrently (same evidence/scope guarantees).
+- `solver.run_solve` supports `rounds_subdir` and a `stop_event` (cancellation) for worker use.
+- Runtime lock hardening (`runtime_lock.py`): replaced the per-entry RLock with an owner-thread +
+  polling model and close-on-release fd lifecycle, making the lock safe for concurrent *threads* on
+  the same challenge while preserving cross-process flock exclusion (regression: multi-thread
+  racing used to deadlock/raise after 30s).
+
+### Fixed
+- `race` parser was silently not registered in cli.py (now asserted + tested).
+
+
 
 ### Added
 - Platform bridge (`ctf_agent/platform.py` + `ctfctl platform ctfd list|pull`): `NormalizedChallenge`

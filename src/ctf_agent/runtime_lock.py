@@ -1,13 +1,21 @@
 """Challenge-level runtime lock for serialized mutations.
 
 Canonical challenge files (``state.yaml``, ``events.jsonl``,
-``evidence.jsonl``, log metadata, flag records, merge history) must only be
-mutated while holding the challenge lock. The lock uses Linux ``fcntl.flock``
-for cross-process exclusion and a per-process registry so nested acquisitions
-by the same thread reuse the already-held flock instead of deadlocking::
+``evidence.log``, log metadata, flag records, merge history) must only be
+mutated while holding the challenge lock.
 
-    with challenge_lock(challenge_dir, description="state update"):
-        ...
+Design:
+
+- Cross-process exclusion: Linux ``fcntl.flock`` on ``.runtime.lock``.
+- In-process exclusion: a registry keeps ONE open file descriptor per
+  challenge path and tracks the owning thread id. Only the owner may enter;
+  other threads poll until the owner releases (no per-entry RLock, so there
+  is no delete/release race).
+- Reentrancy: the same thread may nest acquisitions (depth counter), which is
+  what lets ``merge -> add_fact -> event`` reuse the lock without deadlocking.
+
+The lock is therefore safe for multiple threads *and* multiple processes
+operating on the same challenge.
 """
 from __future__ import annotations
 
@@ -17,7 +25,7 @@ import fcntl
 import os
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
@@ -25,7 +33,7 @@ from .errors import CTFError
 
 LOCK_FILE_NAME = ".runtime.lock"
 DEFAULT_TIMEOUT_SECONDS = 30.0
-FLOCK_POLL_SECONDS = 0.05
+FLOCK_POLL_SECONDS = 0.02
 
 
 class ChallengeLockError(CTFError):
@@ -33,14 +41,13 @@ class ChallengeLockError(CTFError):
 
 
 @dataclass
-class _HeldLock:
-    path: Path
+class _Entry:
     fd: int = -1
+    owner: int | None = None  # threading.get_ident() of the owning thread
     depth: int = 0
-    guard: threading.RLock = field(default_factory=threading.RLock)
 
 
-_registry: dict[str, _HeldLock] = {}
+_registry: dict[str, _Entry] = {}
 _registry_guard = threading.Lock()
 
 
@@ -52,71 +59,82 @@ def _key(challenge_dir: Path) -> str:
     return str(lock_path(challenge_dir))
 
 
+def _open_fd(path: Path) -> int:
+    os.makedirs(path.parent, exist_ok=True)
+    return os.open(path, os.O_CREAT | os.O_RDWR, 0o644)
+
+
 def acquire(challenge_dir: Path, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> bool:
     """Acquire the challenge lock, waiting up to ``timeout`` seconds."""
-    challenge_dir = Path(challenge_dir).resolve()
-    key = _key(challenge_dir)
-    with _registry_guard:
-        held = _registry.get(key)
-        if held is None:
-            held = _HeldLock(path=lock_path(challenge_dir))
-            _registry[key] = held
-    # In-process mutual exclusion. Reentrant for the owning thread, so nested
-    # mutations (merge -> add_fact -> event) do not deadlock.
-    if not held.guard.acquire(timeout=timeout):
-        return False
-    try:
-        if held.depth == 0:
-            if not _flock_exclusive(held, timeout=timeout):
-                held.guard.release()
-                return False
-        held.depth += 1
-        return True
-    except BaseException:
-        held.guard.release()
-        raise
-
-
-def release(challenge_dir: Path) -> None:
-    """Release a lock previously acquired by this process."""
-    challenge_dir = Path(challenge_dir).resolve()
-    key = _key(challenge_dir)
-    with _registry_guard:
-        held = _registry.get(key)
-        if held is None or held.depth <= 0:
-            raise ChallengeLockError(
-                f"Runtime lock for {challenge_dir} is not held by this process"
-            )
-        held.depth -= 1
-        if held.depth == 0:
-            if held.fd >= 0:
-                try:
-                    fcntl.flock(held.fd, fcntl.LOCK_UN)
-                finally:
-                    os.close(held.fd)
-                    held.fd = -1
-            del _registry[key]
-    held.guard.release()
-
-
-def _flock_exclusive(held: _HeldLock, timeout: float) -> bool:
-    if held.fd < 0:
-        os.makedirs(held.path.parent, exist_ok=True)
-        held.fd = os.open(held.path, os.O_CREAT | os.O_RDWR, 0o644)
+    path = lock_path(challenge_dir)
+    key = str(path)
+    me = threading.get_ident()
     deadline = time.monotonic() + timeout
+
+    # Claim ownership (or bump depth for the current owner).
+    while True:
+        with _registry_guard:
+            entry = _registry.setdefault(key, _Entry())
+            if entry.owner == me:
+                entry.depth += 1
+                return True
+            if entry.owner is None:
+                if entry.fd < 0:
+                    entry.fd = _open_fd(path)
+                entry.owner = me
+                entry.depth = 1
+                break  # now try the flock below
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(FLOCK_POLL_SECONDS)
+
+    # Acquire the OS-level lock for our (single, cached) file descriptor.
     while True:
         try:
-            fcntl.flock(held.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(entry.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             return True
         except OSError as exc:
             if exc.errno not in (errno.EACCES, errno.EAGAIN):
+                with _registry_guard:
+                    if entry.fd >= 0:
+                        os.close(entry.fd)
+                    entry.fd = -1
+                    entry.owner = None
+                    entry.depth = 0
                 raise
             if time.monotonic() >= deadline:
-                if held.fd >= 0:
-                    os.close(held.fd)
-                    held.fd = -1
+                with _registry_guard:
+                    if entry.fd >= 0:
+                        os.close(entry.fd)
+                    entry.fd = -1
+                    entry.owner = None
+                    entry.depth = 0
                 return False
             time.sleep(FLOCK_POLL_SECONDS)
+
+
+def release(challenge_dir: Path) -> None:
+    """Release a lock previously acquired by the calling thread."""
+    key = _key(challenge_dir)
+    me = threading.get_ident()
+    with _registry_guard:
+        entry = _registry.get(key)
+        if entry is None or entry.owner != me or entry.depth <= 0:
+            raise ChallengeLockError(
+                f"Runtime lock for {challenge_dir} is not held by this thread"
+            )
+        entry.depth -= 1
+        if entry.depth == 0:
+            try:
+                if entry.fd >= 0:
+                    fcntl.flock(entry.fd, fcntl.LOCK_UN)
+            finally:
+                if entry.fd >= 0:
+                    os.close(entry.fd)
+                entry.fd = -1
+                entry.owner = None
+    # The entry stays cached, but the fd is closed so fork()ed children never
+    # share an open file description (which would defeat cross-process flock).
 
 
 @contextlib.contextmanager

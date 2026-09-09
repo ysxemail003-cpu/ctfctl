@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -320,6 +321,8 @@ def run_solve(
     action_timeout: float = 120.0,
     model_timeout: float = 300.0,
     extra_context: str | None = None,
+    rounds_subdir: str | None = None,
+    stop_event: Any | None = None,
     ctfctl_path: Path = DEFAULT_CTFCTL,
 ) -> SolveSummary:
     """Run the solve loop against one challenge workspace until solved or stuck."""
@@ -336,6 +339,8 @@ def run_solve(
     category = str((data.get("challenge") or {}).get("category", "MISC")).upper()
     challenge_name = str((data.get("challenge") or {}).get("name", challenge_dir.name))
     rounds_dir = challenge_dir / "agent_rounds"
+    if rounds_subdir:
+        rounds_dir = rounds_dir / rounds_subdir
     rounds_dir.mkdir(parents=True, exist_ok=True)
 
     history: list[dict[str, Any]] = []
@@ -346,6 +351,11 @@ def run_solve(
     summary = SolveSummary(challenge=challenge_name, category=category, status="STUCK", reason=None, rounds=0, flag=None, round_dir=rounds_dir)
 
     for round_index in range(1, max_rounds + 1):
+        if stop_event is not None and stop_event.is_set():
+            summary.status = "CANCELLED"
+            summary.reason = "cancelled (another racer won or operator stop)"
+            summary.rounds = len(history)
+            break
         prompt = compose_round_prompt(challenge_dir, round_index, max_rounds, history, extra_context=extra_context)
         try:
             response = policy.act(round_index, prompt)
@@ -488,3 +498,83 @@ def _write_round(
         encoding="utf-8",
     )
     (round_dir / "record.json").write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+
+def race_solve(
+    challenge_dir: Path,
+    backends: list[backends_module.Backend],
+    per_worker_rounds: int = 6,
+    action_timeout: float = 120.0,
+    model_timeout: float = 300.0,
+    extra_context: str | None = None,
+) -> dict[str, Any]:
+    """Race multiple model backends on one challenge; first SOLVED wins.
+
+    Each backend runs its own independent loop under
+    ``agent_rounds/<backend>/`` (own round files, no cross-talk). The first
+    worker to reach SOLVED stops the others (checked between rounds). Actions
+    from different workers serialize on the challenge runtime lock, so the
+    evidence/scope/budget guarantees of single-worker solving still hold.
+    """
+    challenge_dir = challenge_dir.resolve()
+    if not backends:
+        raise CTFError("race_solve requires at least one backend.")
+    if not (challenge_dir / "state.yaml").is_file():
+        raise CTFError(f"Not a challenge directory (missing state.yaml): {challenge_dir}")
+
+    stop_event = threading.Event()
+    results: list[tuple[str, SolveSummary]] = []
+    results_lock = threading.Lock()
+
+    def worker(backend: backends_module.Backend) -> None:
+        subdir = re.sub(r"[^A-Za-z0-9._-]", "-", backend.name or "worker")
+        summary = run_solve(
+            challenge_dir,
+            backend=backend,
+            max_rounds=per_worker_rounds,
+            action_timeout=action_timeout,
+            model_timeout=model_timeout,
+            extra_context=extra_context,
+            rounds_subdir=subdir,
+            stop_event=stop_event,
+        )
+        with results_lock:
+            results.append((backend.name, summary))
+        if summary.status == "SOLVED":
+            stop_event.set()
+
+    threads = [threading.Thread(target=worker, args=(backend,), daemon=True) for backend in backends]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    winner_name = next((name for name, summary in results if summary.status == "SOLVED"), None)
+    winner = next((summary for name, summary in results if summary.status == "SOLVED"), None)
+    status = "SOLVED" if winner else "STUCK"
+    reason = winner.reason if winner else ("no backend solved within caps" if results else "no workers returned")
+    per_backend = [
+        {
+            "backend": name,
+            "status": summary.status,
+            "rounds": summary.rounds,
+            "flag": summary.flag,
+            "reason": summary.reason,
+        }
+        for name, summary in results
+    ]
+    rounds_dir = challenge_dir / "agent_rounds"
+    rounds_dir.mkdir(parents=True, exist_ok=True)
+    record = {
+        "schema_version": 1,
+        "challenge": str((StateStore(challenge_dir).load().get("challenge") or {}).get("name", challenge_dir.name)),
+        "status": status,
+        "reason": reason,
+        "winner_backend": winner_name,
+        "flag": winner.flag if winner else None,
+        "per_backend": per_backend,
+        "round_dir": str(rounds_dir),
+    }
+    (rounds_dir / "race-summary.json").write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return record

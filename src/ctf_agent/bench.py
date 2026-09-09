@@ -31,6 +31,7 @@ import subprocess
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -220,6 +221,7 @@ def run_challenge(
     backend: Any = None,
     policy: Any = None,
     max_rounds: int = 8,
+    parallel: int = 1,
 ) -> dict[str, Any]:
     """Run one synthetic challenge and return its result record."""
     missing = _missing_requires(challenge)
@@ -410,6 +412,7 @@ def run_suite(
     backend: Any = None,
     policy: Any = None,
     max_rounds: int = 8,
+    parallel: int = 1,
 ) -> dict[str, Any]:
     """Run a whole benchmark suite and write summary/failure/report files."""
     suite_dir = Path(suite_dir).resolve()
@@ -424,9 +427,8 @@ def run_suite(
     run_dir = date_dir / f"run-{utcnow()[11:19].replace(':', '')}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    results: list[dict[str, Any]] = []
-    for challenge in challenges:
-        result = run_challenge(
+    def run_one(challenge: BenchChallenge) -> dict[str, Any]:
+        return run_challenge(
             challenge,
             run_dir,
             ctfctl_path=ctfctl_path,
@@ -436,7 +438,12 @@ def run_suite(
             policy=policy,
             max_rounds=max_rounds,
         )
-        results.append(result)
+
+    if parallel and parallel > 1:
+        with ThreadPoolExecutor(max_workers=int(parallel)) as executor:
+            results = list(executor.map(run_one, challenges))
+    else:
+        results = [run_one(challenge) for challenge in challenges]
 
     summary: dict[str, Any] = {
         "schema_version": SUITE_SCHEMA_VERSION,

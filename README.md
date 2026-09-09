@@ -129,6 +129,8 @@ export CTF_CHALLENGE_DIR="$PWD/workspace/contests/2026-demo/web-login"
 ./tools/ctfctl status --markdown
 ./tools/ctfctl context --markdown
 ./tools/ctfctl solve --backend auto   # autonomous solve loop (codex/claude/gemini)
+./tools/ctfctl race --backends codex,claude   # race backends; first SOLVED wins
+./tools/ctfctl bench --parallel 4             # run the synthetic suite concurrently
 ./tools/ctfctl platform ctfd pull --url https://ctf.example --event EVENT   # CTFd bridge
 ./tools/ctfctl trajectory export     # CSAW-style trajectory JSON + Markdown
 ```

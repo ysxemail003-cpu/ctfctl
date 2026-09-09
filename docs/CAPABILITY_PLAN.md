@@ -735,9 +735,27 @@ Batch 1 完成前不启动 E（racing）、F（沙箱）、D 的自动领题，�
 - 残余/待办：真实 CTFd 实例未联调（端点为 CTFd>=3 v1 约定，若目标实例字段不同需微调，模块
   已文档化）；scoreboard/HTB 等平台未做（平台抽象已留扩展点）；Phase E（并行竞速）未开始。
 
-### 批次 1h（规划中）
+### 批次 1h（Phase E 并行竞速，2026-09-09）
 
-- Phase E：并行竞速（多 worker/多模型，预算控制，幂等仲裁）→ 之后回到开源发布准备（Phase H）。
+> E1/E2 落地；E3 预算以每 worker rounds 上限 + action/model 超时近似（实时共享总轮数预算列为残余项）。
+
+- `ctfctl race --backends codex,claude,gemini|auto`：同题多后端竞速，各自独立 rounds
+  （`agent_rounds/<backend>/`），首个 SOLVED 胜出，其余 worker 轮间取消；
+  `agent_rounds/race-summary.json` 记录 per-backend 结果与胜者。
+- `ctfctl bench --parallel N`：套件内挑战并发跑（脚本或 solver driver 均支持）。
+- `solver.run_solve` 支持 `rounds_subdir` + `stop_event`；`race_solve` 线程化编排。
+- **runtime_lock 重写**：registry 单 RLock + 删除时序在多线程下有竞态（实测同题双线程 30s
+  超时/“not held”）；改为 owner-thread + 轮询模型 + release 即关 fd（避免 fork 后父子共享
+  open file description 使 flock 失效）。单进程 4 线程嵌套压测与跨进程排除测试均通过；
+  既有并发/状态/runner 全套无回归。
+- 测试：race 首胜/无胜者、rounds 子目录、取消事件、bench 并行；`race` 解析器补登记断言。
+- 提交点：`<见 git log：Phase E 提交>`。
+- 残余/待办：实时共享“总轮数预算”未做（每 worker rounds 上限近似）；E4 知识库读写为 Phase G
+  事项（当前每 worker 独立只读）；真实多模型跑分待 operator。
+
+### 批次 1i（规划中）
+
+- Phase G（记忆/复盘）或 Phase H（开源发布准备）——视主线优先级。
 
 
 

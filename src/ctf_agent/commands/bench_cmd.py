@@ -23,6 +23,7 @@ def _handle_bench(args) -> int:
         driver=args.driver,
         backend=backend,
         max_rounds=args.max_rounds,
+        parallel=args.parallel,
     )
     counts = summary["counts"]
     json_print(

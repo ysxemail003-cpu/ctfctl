@@ -204,6 +204,15 @@ The document is an implementation contract for delegated AI developers. It defin
 work ownership, non-goals, acceptance criteria, security constraints, test matrix,
 and the required delivery format.
 
+## Capability roadmap
+
+Phase 2 turns the runtime into an efficient, high-capability autonomous CTF solver:
+structured Kali-tool adapters, a solve loop, a reproducible capability benchmark,
+CTFd/platform bridge, trajectory export, parallel racing, sandboxed execution, and a
+cross-challenge knowledge ledger. The implementation contract is in
+[`docs/CAPABILITY_PLAN.md`](docs/CAPABILITY_PLAN.md). A third-party positioning and
+open-source review is in [`docs/OPENSOURCE_REVIEW.md`](docs/OPENSOURCE_REVIEW.md).
+
 ## Development
 
 ```bash

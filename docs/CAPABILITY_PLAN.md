@@ -769,9 +769,12 @@ Batch 1 完成前不启动 E（racing）、F（沙箱）、D 的自动领题，�
 - 残余/待办：repeat_failure_rate 在 bench 的前后对照需真实 solver 跑分；知识去重/过期策略未做；
   Phase H 发布项已部分完成（v0.5.0 已打 tag：MIT、双语 README、demo、CONTRIBUTING/SECURITY）。
 
-### 批次 1j（规划中）
+### 批次 1j（状态登记，2026-09-09）
 
-- 剩余：suite v3（hard）+ 真实 LLM 基线（`--driver solver`/`race`）对照登记 + GitHub 推送。
+- **suite v3（hard 题）已冻结/待定**（operator 决定暂缓，恢复时再评估）。
+- 剩余待办：真实 LLM 基线（`ctfctl bench --driver solver` / `ctfctl race`）对照登记到
+  `bench/RESULTS.md`；GitHub 推送（等待 operator 指令）。
+
 
 
 

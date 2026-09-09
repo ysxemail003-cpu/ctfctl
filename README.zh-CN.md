@@ -49,7 +49,7 @@
 | CTFd 平台桥 + 轨迹导出 | 已交付 | `docs/SOLVER_ARCHITECTURE.md` |
 | 并行竞速 + 线程/进程安全的运行时锁 | 已交付 | `docs/SOLVER_ARCHITECTURE.md` |
 | 知识账本 + 赛后复盘 | 已交付 | `docs/SOLVER_ARCHITECTURE.md` |
-| 更难 suite v3 | 下一步 | `docs/CAPABILITY_PLAN.md` |
+| 更难 suite v3 | 待定/冻结 | `docs/CAPABILITY_PLAN.md` |
 
 ## 快速开始
 

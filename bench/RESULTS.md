@@ -73,3 +73,4 @@ Totals: 12/12 SOLVED — 0 FAILED, 0 ERROR, 0 SKIPPED (suite wall time ≈ 9 s).
 - Suite v3 target: keep ≥2/category; add harder entries (medium+ / hard) that
   exercise network-fuzzing and deep-reversing adapters; optional external
   provider (NYU dev subset) stays opt-in behind `--driver solver`.
+  **Status: frozen / on hold (operator decision, 2026-09-09).**

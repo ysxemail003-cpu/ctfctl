@@ -51,7 +51,7 @@ It is **not**:
 | CTFd platform bridge + trajectory export | shipped | `docs/SOLVER_ARCHITECTURE.md` |
 | Parallel racing + thread/process-safe runtime lock | shipped | `docs/SOLVER_ARCHITECTURE.md` |
 | Knowledge ledger + post-solve review | shipped | `docs/SOLVER_ARCHITECTURE.md` |
-| Harder suite v3 | next | `docs/CAPABILITY_PLAN.md` |
+| Harder suite v3 | on hold | `docs/CAPABILITY_PLAN.md` |
 
 ## Quick start
 

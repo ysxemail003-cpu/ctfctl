@@ -62,3 +62,14 @@ def test_run_tty_timeout_terminates_process_group(tmp_path: Path):
     assert meta["timed_out"] is True
     assert meta["terminated"] in {"SIGTERM", "SIGKILL"}
     assert meta["exit_code"] == 124
+
+
+def test_run_command_non_quiet_output_and_cache_skip(tmp_path: Path, capsys):
+    challenge = _challenge(tmp_path, "runner-nonquiet")
+    run_command(challenge, ["printf", "visible-output\n"], "show", "test")
+    out = capsys.readouterr().out
+    assert "visible-output" in out
+    assert '"id"' in out
+    run_command(challenge, ["printf", "visible-output\n"], "show", "test")
+    out2 = capsys.readouterr().out
+    assert "[skip]" in out2

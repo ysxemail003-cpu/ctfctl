@@ -40,3 +40,26 @@ def test_ghidra_export_runs_or_reports_missing_tool(tmp_path: Path):
         assert result.get("exit_code") == 0
         assert "function_count" in result
         assert result.get("function_count", 0) > 0
+
+
+def test_elf_recon_missing_relative_and_non_elf(tmp_path: Path):
+    import shutil
+
+    from ctf_agent.adapters import elf as elf_adapter
+
+    challenge = _challenge(tmp_path, "elf-extra")
+    with pytest.raises(CTFError):
+        elf_adapter.recon(challenge, tmp_path / "missing.bin")
+
+    copied = challenge / "work" / "truecopy"
+    shutil.copy2("/bin/true", copied)
+    copied.chmod(0o755)
+    relative = elf_adapter.recon(challenge, Path("work/truecopy"))
+    assert relative["bits"] == 64
+    assert relative["arch"] == "amd64"
+
+    text_file = challenge / "work" / "notes.txt"
+    text_file.write_text("hello not an elf", encoding="utf-8")
+    result = elf_adapter.recon(challenge, text_file)
+    assert result["logs"]["file"].startswith("LOG-")
+    assert "bits" not in result  # no ELF classification

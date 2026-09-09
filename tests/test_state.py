@@ -122,3 +122,21 @@ def test_evidence_record_can_be_referenced(tmp_path: Path):
     record = EvidenceLedger(challenge).add(log1, "Observation", "Meaning")
     fact = StateStore(challenge).add_fact("Backed by ledger record", [record["id"]])
     assert fact["evidence"] == [record["id"]]
+
+
+def test_render_skips_rewrite_when_unchanged(tmp_path: Path):
+    challenge = init_challenge(tmp_path, "demo", "renderskip", "web", "AI_NATIVE", confirm_authorization=True)
+    store = StateStore(challenge)
+    log1 = _log(challenge, "one")
+    store.add_fact("Stable fact", [log1])
+    state_md = challenge / "STATE.md"
+    mtime = state_md.stat().st_mtime_ns
+    store.render(store.load())  # identical content must not rewrite
+    assert state_md.stat().st_mtime_ns == mtime
+
+    ledger = EvidenceLedger(challenge)
+    ledger.add(log1, "Observation", "Meaning")
+    evidence_md = challenge / "EVIDENCE.md"
+    emtime = evidence_md.stat().st_mtime_ns
+    ledger.render()  # identical content must not rewrite
+    assert evidence_md.stat().st_mtime_ns == emtime

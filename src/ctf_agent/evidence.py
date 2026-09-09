@@ -15,7 +15,7 @@ from typing import Any, cast
 from .errors import CTFError
 from .records import EvidenceRecord
 from .runtime_lock import challenge_lock
-from .util import append_jsonl, atomic_write_text, next_id, utcnow
+from .util import append_jsonl, next_id, utcnow, write_if_changed
 
 LOG_ID_RE = re.compile(r"LOG-\d{6}")
 EVIDENCE_ID_RE = re.compile(r"E-\d{6}")
@@ -179,5 +179,5 @@ class EvidenceLedger:
                 ]
             )
         content = "\n".join(lines)
-        atomic_write_text(self.markdown_path, content)
+        write_if_changed(self.markdown_path, content)
         return content

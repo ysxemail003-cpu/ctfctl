@@ -69,6 +69,23 @@ def atomic_write_text(path: Path, content: str) -> None:
             os.unlink(tmp_name)
 
 
+def write_if_changed(path: Path, content: str) -> bool:
+    """Atomically write *content* only when it differs from the current file.
+
+    Returns True when the file was rewritten. Projection files (STATE.md,
+    EVIDENCE.md) use this so repeated renders of unchanged canonical data do
+    not churn the filesystem.
+    """
+    if path.is_file():
+        try:
+            if path.read_text(encoding="utf-8") == content:
+                return False
+        except OSError:
+            pass
+    atomic_write_text(path, content)
+    return True
+
+
 def atomic_write_yaml(path: Path, data: dict[str, Any]) -> None:
     import yaml
 

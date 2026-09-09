@@ -354,6 +354,13 @@ def build_parser() -> argparse.ArgumentParser:
     final.add_argument("--lesson", action="append", default=[])
     final.add_argument("--output", type=Path)
 
+    # capability benchmark
+    bench = subparsers.add_parser("bench", help="Run the capability benchmark suite (synthetic challenges)")
+    bench.add_argument("--suite", type=Path, default=None, help="Suite root (default: bench/challenges)")
+    bench.add_argument("--out", type=Path, default=None, help="Results root (default: bench/results)")
+    bench.add_argument("--only", default=None, help="Run a single challenge id")
+    bench.add_argument("--timeout", type=float, default=180.0, help="Per-challenge driver timeout")
+
     # sync agents
     sync = subparsers.add_parser("sync-agents", help="Generate Claude Code and Codex agent files")
     sync.add_argument("--install-codex", action="store_true", help="Also install skills into ~/.codex/skills")

@@ -2,7 +2,23 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] - capability phase (Batch 1b: Phase A3/A4 tool adapters)
+## [Unreleased] - capability phase (Batch 1c: Phase C benchmark suite v1)
+
+### Added
+- Capability benchmark harness (`ctf_agent/bench.py` + `ctfctl bench`): discovers
+  `challenge.json` manifests, creates an isolated AI_NATIVE workspace per run, imports
+  `original/*` through the normal ingest path, starts a local target server for web-style
+  challenges, executes a deterministic `solve.py` driver under timeout, and writes
+  `summary.json` / `failure_modes.json` / `REPORT.md` under `bench/results/<date>/`.
+- Missing required tools are reported as SKIPPED (not FAILED) so the suite can run on
+  minimal CI images; drivers report via a `FLAG=` line; per-challenge `actions` counts
+  logged command records.
+- Synthetic suite v1 (`bench/challenges/`): 6 original easy challenges, one per category —
+  crypto/hash-crack (john), forensics/hidden-zip (binwalk carve), web/http-header (local
+  target server), pwn/argv-gate (strings + run), rev/xor-file, misc/rot-multi.
+- `make bench` target; `bench/RESULTS.md` baseline 1 (6/6 SOLVED ≈ 6 s).
+
+
 
 ### Added
 - Web adapters (`ctf_agent/adapters/web.py`): `ctfctl tool ffuf` (scope-checked, FUZZ-position

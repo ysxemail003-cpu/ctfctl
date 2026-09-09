@@ -24,3 +24,6 @@ core.*
 .coverage
 .coverage.*
 htmlcov/
+
+# bench run artifacts (RESULTS.md is committed)
+bench/results/

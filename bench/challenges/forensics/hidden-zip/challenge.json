@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "hidden-zip",
+  "category": "forensics",
+  "difficulty": "easy",
+  "title": "Hidden Zip in PNG",
+  "description": "A PNG has a zip archive appended to it. Carve it out and read flag.txt.",
+  "flag": "flag{zipped_away}",
+  "driver": "script",
+  "solve": "solve.py",
+  "requires": [
+    "binwalk"
+  ],
+  "target": false,
+  "files": [
+    "carrier.png"
+  ]
+}

@@ -649,9 +649,29 @@ Batch 1 完成前不启动 E（racing）、F（沙箱）、D 的自动领题，�
   （= 词表行数 × FUZZ 位），与真实发送数可能略有出入，属诚实上界。
 - 至此 Phase A 全部完成（A1–A4）。
 
-### 批次 1c（规划中）
+### 批次 1c（Phase C 基准 v1，2026-09-09）
 
-- Phase B 求解循环骨架（`backends.py` + `solver.py`）→ Phase C 合成题集 + `ctfctl bench`。
+> 完成 C1（合成题集首版）+ C2（harness + 指标输出）+ C3（基线登记）。C4（外部基准）按计划延后。
+
+- `src/ctf_agent/bench.py` + `ctfctl bench`：发现 `challenge.json` → 每题隔离 AI_NATIVE 工作区
+  → 经 ingest 导入 `original/*` → web 题自动起本地靶标服务器 → 超时执行确定性 `solve.py` driver
+  （`FLAG=` 行上报）→ 产出 `summary.json` / `failure_modes.json` / `REPORT.md`；缺工具记
+  `SKIPPED` 而非 `FAILED`（CI 友好）；`actions` 统计每题真实落盘命令数。
+- 合成题集 v1（`bench/challenges/`，全部原创、离线、无真实赛题材料）：6 题 easy 每类一题 —
+  crypto/hash-crack（john+hashid）、forensics/hidden-zip（binwalk 提取）、web/http-header
+  （本地靶标 + `tool http`）、pwn/argv-gate（strings 找口令 + run 执行）、rev/xor-file、
+  misc/rot-multi。
+- `make bench` 目标；`bench/RESULTS.md` 基线 1：6/6 SOLVED，墙钟 ≈ 6 s（含 john/binwalk）。
+- 提交点：`<见 git log：Phase C v1 提交>`。
+- 残余/待办：C1 未达“每类 ≥2 题、含 medium”目标（suite v2 计划，见 RESULTS.md Growth rules）；
+  solve.py 驱动目前是“脚本模式”，Phase B 的 LLM solver 接入后 bench 增加 `--driver solver` 选项；
+  `actions` 目前只统计命令数，token/成本统计待 Phase B 后端接入。
+
+### 批次 1d（规划中）
+
+- Phase B 求解循环骨架（`backends.py` + `solver.py`）→ bench 接入 solver driver → suite v2 扩容。
+
+
 
 
 

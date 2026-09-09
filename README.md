@@ -217,6 +217,7 @@ open-source review is in [`docs/OPENSOURCE_REVIEW.md`](docs/OPENSOURCE_REVIEW.md
 
 ```bash
 make test
+make bench   # capability benchmark on the self-contained synthetic suite
 ```
 
 ## Design goals

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "argv-gate",
+  "category": "pwn",
+  "difficulty": "easy",
+  "title": "Password Gate",
+  "description": "The ELF prints the flag when given the right argument. Find the password (strings) and run it.",
+  "flag": "flag{pwn_argv_gate}",
+  "driver": "script",
+  "solve": "solve.py",
+  "requires": [],
+  "target": false,
+  "files": [
+    "gate"
+  ]
+}

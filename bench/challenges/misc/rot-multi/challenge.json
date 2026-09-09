@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "rot-multi",
+  "category": "misc",
+  "difficulty": "easy",
+  "title": "ROT13 Layers",
+  "description": "The message was encoded twice with ROT13.",
+  "flag": "flag{misc_rot_layers}",
+  "driver": "script",
+  "solve": "solve.py",
+  "requires": [],
+  "target": false,
+  "files": [
+    "message.txt"
+  ]
+}

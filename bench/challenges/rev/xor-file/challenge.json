@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "xor-file",
+  "category": "rev",
+  "difficulty": "easy",
+  "title": "Single-Byte XOR",
+  "description": "The file is the flag XORed with the byte 0x42.",
+  "flag": "flag{xor_file_rev}",
+  "driver": "script",
+  "solve": "solve.py",
+  "requires": [],
+  "target": false,
+  "files": [
+    "secret.bin"
+  ]
+}

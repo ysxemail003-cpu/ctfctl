@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "http-header",
+  "category": "web",
+  "difficulty": "easy",
+  "title": "Flag in Response Header",
+  "description": "The challenge server returns the flag in the X-Bench-Flag response header.",
+  "flag": "flag{http_header_sniff}",
+  "driver": "script",
+  "solve": "solve.py",
+  "requires": [],
+  "target": true,
+  "files": []
+}

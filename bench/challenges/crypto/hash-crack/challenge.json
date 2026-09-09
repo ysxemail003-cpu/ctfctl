@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "hash-crack",
+  "category": "crypto",
+  "difficulty": "easy",
+  "title": "Hash Crack",
+  "description": "Crack the MD5 hash with john using the bundled wordlist.",
+  "flag": "flag{sunshine}",
+  "driver": "script",
+  "solve": "solve.py",
+  "requires": [
+    "john",
+    "hashid"
+  ],
+  "target": false,
+  "files": [
+    "hash.txt"
+  ]
+}

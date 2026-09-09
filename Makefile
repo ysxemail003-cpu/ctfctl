@@ -4,7 +4,7 @@ RUFF ?= .venv/bin/ruff
 MYPY ?= .venv/bin/mypy
 COVERAGE ?= .venv/bin/coverage
 
-.PHONY: install dev test lint typecheck coverage build check doctor clean
+.PHONY: install dev test lint typecheck coverage build check bench doctor clean
 
 install:
 	test -d .venv || python3 -m venv --system-site-packages .venv
@@ -31,6 +31,9 @@ build:
 	$(PY) -m build
 
 check: test lint typecheck coverage
+
+bench:
+	./tools/ctfctl bench
 
 doctor:
 	./tools/ctfctl doctor

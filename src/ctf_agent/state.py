@@ -8,11 +8,11 @@ from .evidence import validate_evidence_refs
 from .runtime_lock import challenge_lock
 from .util import (
     append_jsonl,
-    atomic_write_text,
     atomic_write_yaml,
     next_id,
     read_yaml,
     utcnow,
+    write_if_changed,
 )
 
 VALID_STATUSES = {
@@ -69,6 +69,7 @@ def default_state(event: str, challenge: str, category: str, mode: str) -> dict[
             "checked_at": None,
         },
         "operator_constraints": [],
+        "active_tasks": [],
         "current_objective": "Establish facts and authorized target scope.",
         "next_action": "Run ctfctl doctor and inspect challenge inputs.",
         "facts": [],
@@ -452,5 +453,5 @@ class StateStore:
             ]
         )
         content = "\n".join(lines)
-        atomic_write_text(self.challenge_dir / "STATE.md", content)
+        write_if_changed(self.challenge_dir / "STATE.md", content)
         return content

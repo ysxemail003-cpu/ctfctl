@@ -9,7 +9,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from .errors import FlagError
+from .errors import FlagError, StateError
 from .runner import run_command
 from .scope import ScopeStore
 from .state import StateStore
@@ -201,11 +201,18 @@ def verify_replay(
         objective="Complete flag verification",
     )
     if state.load().get("status") != "SOLVED":
-        state.transition(
-            "VERIFICATION",
-            "Candidate flag reproduced at least twice",
-            logs,
-        )
+        reason = "Candidate flag reproduced at least twice"
+        try:
+            state.transition("VERIFICATION", reason, logs)
+        except StateError:
+            # Direct verification after reproduction may skip intermediate
+            # statuses; record the override as a forced, evidenced transition.
+            state.transition(
+                "VERIFICATION",
+                f"{reason} (forced: direct verification after reproduction)",
+                logs,
+                force=True,
+            )
     return {
         "verified": True,
         "value": final_value,

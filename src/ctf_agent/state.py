@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Any
 
 from .errors import StateError
+from .evidence import validate_evidence_refs
+from .runtime_lock import challenge_lock
 from .util import (
     append_jsonl,
     atomic_write_text,
@@ -29,11 +31,27 @@ VALID_STATUSES = {
 VALID_CONFIDENCE = {"LOW", "MEDIUM", "HIGH"}
 VALID_HYPOTHESIS_STATUS = {"OPEN", "CONFIRMED", "REJECTED", "INCONCLUSIVE"}
 
+# Legal state transitions. Any transition outside this table requires an
+# explicit force with a reason and resolvable evidence.
+ALLOWED_TRANSITIONS: dict[str, set[str]] = {
+    "INIT": {"AUTHORIZED", "BLOCKED", "ABANDONED"},
+    "AUTHORIZED": {"RECON", "BLOCKED", "ABANDONED"},
+    "RECON": {"HYPOTHESIS", "TESTING", "BLOCKED", "ABANDONED"},
+    "HYPOTHESIS": {"TESTING", "RECON", "BLOCKED", "ABANDONED"},
+    "TESTING": {"EXPLOITATION", "VERIFICATION", "HYPOTHESIS", "BLOCKED"},
+    "EXPLOITATION": {"VERIFICATION", "TESTING", "BLOCKED"},
+    "VERIFICATION": {"SOLVED", "EXPLOITATION", "BLOCKED"},
+    "SOLVED": {"SOLVED"},
+    "BLOCKED": {"RECON", "HYPOTHESIS", "ABANDONED"},
+    "ABANDONED": set(),
+}
+
 
 def default_state(event: str, challenge: str, category: str, mode: str) -> dict[str, Any]:
     now = utcnow()
     return {
         "schema_version": 1,
+        "revision": 1,
         "challenge": {
             "event": event,
             "name": challenge,
@@ -80,11 +98,19 @@ def default_state(event: str, challenge: str, category: str, mode: str) -> dict[
 
 
 class StateStore:
+    """Canonical challenge state with revision-guarded, locked mutations.
+
+    Every mutator runs under the challenge runtime lock and bumps ``revision``.
+    ``save()`` compares the on-disk revision against the revision seen by the
+    last ``load()`` and refuses to overwrite state changed by another agent.
+    """
+
     def __init__(self, challenge_dir: Path):
         self.challenge_dir = challenge_dir.resolve()
         self.state_path = self.challenge_dir / "state.yaml"
         self.events_path = self.challenge_dir / "events.jsonl"
         self.evidence_path = self.challenge_dir / "evidence.jsonl"
+        self._base_revision: int | None = None
         if not self.state_path.is_file():
             raise StateError(
                 f"No state.yaml in {self.challenge_dir}. Run `ctfctl init` first or use --challenge-dir."
@@ -94,38 +120,87 @@ class StateStore:
         data = read_yaml(self.state_path)
         if data.get("schema_version") != 1:
             raise StateError(f"Unsupported state schema in {self.state_path}")
+        data.setdefault("revision", 1)
+        try:
+            self._base_revision = int(data["revision"])
+        except (TypeError, ValueError) as exc:
+            raise StateError(f"Invalid revision in {self.state_path}") from exc
         return data
 
     def save(self, data: dict[str, Any]) -> None:
-        data["updated_at"] = utcnow()
-        atomic_write_yaml(self.state_path, data)
-        self.render(data)
+        """Persist *data* under the lock, bumping revision with a CAS check."""
+        with challenge_lock(self.challenge_dir, description="state.save"):
+            disk = read_yaml(self.state_path)
+            disk_revision = int(disk.get("revision") or 1)
+            if self._base_revision is not None and disk_revision != self._base_revision:
+                raise StateError(
+                    f"state.yaml changed on disk (revision {self._base_revision} -> "
+                    f"{disk_revision}); reload and retry"
+                )
+            data["revision"] = disk_revision + 1
+            data["updated_at"] = utcnow()
+            atomic_write_yaml(self.state_path, data)
+            self._base_revision = int(data["revision"])
+            self.render(data)
 
     def event(self, event_type: str, payload: dict[str, Any]) -> str:
-        event_id = next_id(self.events_path, "EVT")
-        append_jsonl(
-            self.events_path,
-            {
-                "id": event_id,
-                "type": event_type,
-                "timestamp": utcnow(),
-                "payload": payload,
-            },
-        )
+        with challenge_lock(self.challenge_dir, description="state.event"):
+            event_id = next_id(self.events_path, "EVT")
+            append_jsonl(
+                self.events_path,
+                {
+                    "id": event_id,
+                    "type": event_type,
+                    "timestamp": utcnow(),
+                    "payload": payload,
+                },
+            )
         return event_id
 
-    def transition(self, status: str, reason: str, evidence: list[str] | None = None) -> dict[str, Any]:
+    def transition(
+        self,
+        status: str,
+        reason: str,
+        evidence: list[str] | None = None,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Transition to *status*, enforcing the legal transition table.
+
+        ``force=True`` permits table violations but requires a non-empty reason
+        and resolvable evidence so every override is auditable.
+        """
         status = status.upper()
+        reason = str(reason or "").strip()
         if status not in VALID_STATUSES:
             raise StateError(f"Invalid status {status}; choose one of {', '.join(sorted(VALID_STATUSES))}")
-        data = self.load()
-        old = data.get("status")
-        data["status"] = status
-        self.event(
-            "state_transition",
-            {"from": old, "to": status, "reason": reason, "evidence": evidence or []},
-        )
-        self.save(data)
+        if not reason:
+            raise StateError("A reason is required for state transitions.")
+        with challenge_lock(self.challenge_dir, description="state.transition"):
+            data = self.load()
+            old = str(data.get("status") or "INIT").upper()
+            allowed = ALLOWED_TRANSITIONS.get(old, set())
+            forced = force and status not in allowed
+            if status not in allowed and not force:
+                raise StateError(
+                    f"Illegal state transition {old} -> {status}. "
+                    f"Allowed from {old}: {', '.join(sorted(allowed)) or 'NONE'}. "
+                    "Use force only with a reason and evidence."
+                )
+            if forced and not evidence:
+                raise StateError("Forced state transitions require evidence.")
+            validate_evidence_refs(self.challenge_dir, evidence)
+            data["status"] = status
+            self.event(
+                "state_transition",
+                {
+                    "from": old,
+                    "to": status,
+                    "reason": reason,
+                    "evidence": evidence or [],
+                    "forced": forced,
+                },
+            )
+            self.save(data)
         return data
 
     def add_fact(
@@ -141,23 +216,25 @@ class StateStore:
             raise StateError("Confidence must be LOW, MEDIUM, or HIGH")
         if classification not in {"FACT", "INFERENCE", "UNKNOWN"}:
             raise StateError("Classification must be FACT, INFERENCE, or UNKNOWN")
-        data = self.load()
-        facts = data.setdefault("facts", [])
-        fact_id = f"F-{len(facts) + 1:04d}"
-        while any(item.get("id") == fact_id for item in facts):
-            suffix = int(fact_id.split("-")[1]) + 1
-            fact_id = f"F-{suffix:04d}"
-        record = {
-            "id": fact_id,
-            "statement": statement,
-            "classification": classification,
-            "confidence": confidence,
-            "evidence": evidence or [],
-            "created_at": utcnow(),
-        }
-        facts.append(record)
-        self.event("fact_added", record)
-        self.save(data)
+        with challenge_lock(self.challenge_dir, description="state.add_fact"):
+            data = self.load()
+            facts = data.setdefault("facts", [])
+            fact_id = f"F-{len(facts) + 1:04d}"
+            while any(item.get("id") == fact_id for item in facts):
+                suffix = int(fact_id.split("-")[1]) + 1
+                fact_id = f"F-{suffix:04d}"
+            validate_evidence_refs(self.challenge_dir, evidence)
+            record = {
+                "id": fact_id,
+                "statement": statement,
+                "classification": classification,
+                "confidence": confidence,
+                "evidence": evidence or [],
+                "created_at": utcnow(),
+            }
+            facts.append(record)
+            self.event("fact_added", record)
+            self.save(data)
         return record
 
     def add_hypothesis(
@@ -171,102 +248,120 @@ class StateStore:
         confidence = confidence.upper()
         if confidence not in VALID_CONFIDENCE:
             raise StateError("Confidence must be LOW, MEDIUM, or HIGH")
-        data = self.load()
-        hypotheses = data.setdefault("hypotheses", [])
-        hypothesis_id = f"H-{len(hypotheses) + 1:04d}"
-        while any(item.get("id") == hypothesis_id for item in hypotheses):
-            suffix = int(hypothesis_id.split("-")[1]) + 1
-            hypothesis_id = f"H-{suffix:04d}"
-        record = {
-            "id": hypothesis_id,
-            "statement": statement,
-            "confidence": confidence,
-            "status": "OPEN",
-            "evidence": evidence or [],
-            "test": test,
-            "expected": expected,
-            "result": None,
-            "created_at": utcnow(),
-            "updated_at": utcnow(),
-        }
-        hypotheses.append(record)
-        self.event("hypothesis_added", record)
-        self.save(data)
+        with challenge_lock(self.challenge_dir, description="state.add_hypothesis"):
+            data = self.load()
+            hypotheses = data.setdefault("hypotheses", [])
+            hypothesis_id = f"H-{len(hypotheses) + 1:04d}"
+            while any(item.get("id") == hypothesis_id for item in hypotheses):
+                suffix = int(hypothesis_id.split("-")[1]) + 1
+                hypothesis_id = f"H-{suffix:04d}"
+            validate_evidence_refs(self.challenge_dir, evidence)
+            record = {
+                "id": hypothesis_id,
+                "statement": statement,
+                "confidence": confidence,
+                "status": "OPEN",
+                "evidence": evidence or [],
+                "test": test,
+                "expected": expected,
+                "result": None,
+                "created_at": utcnow(),
+                "updated_at": utcnow(),
+            }
+            hypotheses.append(record)
+            self.event("hypothesis_added", record)
+            self.save(data)
         return record
 
     def update_hypothesis(self, hypothesis_id: str, status: str, result: str) -> dict[str, Any]:
         status = status.upper()
         if status not in VALID_HYPOTHESIS_STATUS:
             raise StateError("Hypothesis status must be OPEN, CONFIRMED, REJECTED, or INCONCLUSIVE")
-        data = self.load()
-        for item in data.get("hypotheses", []):
-            if item.get("id", "").upper() == hypothesis_id.upper():
-                item["status"] = status
-                item["result"] = result
-                item["updated_at"] = utcnow()
-                self.event("hypothesis_updated", item)
-                self.save(data)
-                return item
-        raise StateError(f"Unknown hypothesis: {hypothesis_id}")
+        with challenge_lock(self.challenge_dir, description="state.update_hypothesis"):
+            data = self.load()
+            for item in data.get("hypotheses", []):
+                if item.get("id", "").upper() == hypothesis_id.upper():
+                    item["status"] = status
+                    item["result"] = result
+                    item["updated_at"] = utcnow()
+                    self.event("hypothesis_updated", item)
+                    self.save(data)
+                    return item
+            raise StateError(f"Unknown hypothesis: {hypothesis_id}")
 
     def set_constraints(self, constraints: list[str]) -> list[str]:
-        data = self.load()
-        normalized = sorted({str(item).strip() for item in constraints if str(item).strip()})
-        data["operator_constraints"] = normalized
-        self.event("operator_constraints_updated", {"constraints": normalized})
-        self.save(data)
+        with challenge_lock(self.challenge_dir, description="state.set_constraints"):
+            data = self.load()
+            normalized = sorted({str(item).strip() for item in constraints if str(item).strip()})
+            data["operator_constraints"] = normalized
+            self.event("operator_constraints_updated", {"constraints": normalized})
+            self.save(data)
         return normalized
 
     def remove_constraint(self, constraint: str) -> list[str]:
-        data = self.load()
-        constraints = [item for item in data.get("operator_constraints", []) if item != constraint]
-        data["operator_constraints"] = constraints
-        self.event("operator_constraints_updated", {"constraints": constraints, "removed": constraint})
-        self.save(data)
+        with challenge_lock(self.challenge_dir, description="state.remove_constraint"):
+            data = self.load()
+            constraints = [item for item in data.get("operator_constraints", []) if item != constraint]
+            data["operator_constraints"] = constraints
+            self.event(
+                "operator_constraints_updated",
+                {"constraints": constraints, "removed": constraint},
+            )
+            self.save(data)
         return constraints
 
     def set_next(self, next_action: str, objective: str | None = None) -> dict[str, Any]:
-        data = self.load()
-        data["next_action"] = next_action
-        if objective is not None:
-            data["current_objective"] = objective
-        self.event(
-            "next_action",
-            {"next_action": next_action, "objective": data.get("current_objective")},
-        )
-        self.save(data)
+        with challenge_lock(self.challenge_dir, description="state.set_next"):
+            data = self.load()
+            data["next_action"] = next_action
+            if objective is not None:
+                data["current_objective"] = objective
+            self.event(
+                "next_action",
+                {"next_action": next_action, "objective": data.get("current_objective")},
+            )
+            self.save(data)
         return data
 
-    def add_technique(self, technique: str, outcome: str, evidence: list[str] | None = None, classification: str | None = None) -> dict[str, Any]:
+    def add_technique(
+        self,
+        technique: str,
+        outcome: str,
+        evidence: list[str] | None = None,
+        classification: str | None = None,
+    ) -> dict[str, Any]:
         outcome = outcome.lower()
         if outcome not in {"successful", "failed"}:
             raise StateError("Technique outcome must be successful or failed")
-        data = self.load()
-        record = {
-            "technique": technique,
-            "evidence": evidence or [],
-            "classification": classification,
-            "timestamp": utcnow(),
-        }
-        data.setdefault("techniques", {}).setdefault(outcome, []).append(record)
-        self.event("technique_recorded", {"outcome": outcome, **record})
-        self.save(data)
+        with challenge_lock(self.challenge_dir, description="state.add_technique"):
+            data = self.load()
+            validate_evidence_refs(self.challenge_dir, evidence)
+            record = {
+                "technique": technique,
+                "evidence": evidence or [],
+                "classification": classification,
+                "timestamp": utcnow(),
+            }
+            data.setdefault("techniques", {}).setdefault(outcome, []).append(record)
+            self.event("technique_recorded", {"outcome": outcome, **record})
+            self.save(data)
         return record
 
     def update_flag(self, patch: dict[str, Any], event_type: str = "flag_updated") -> dict[str, Any]:
-        data = self.load()
-        flag = data.setdefault("flag", {})
-        current_repro = flag.setdefault("reproduction", {})
-        current_sub = flag.setdefault("submission", {})
-        for key, value in patch.items():
-            if key == "reproduction":
-                current_repro.update(value)
-            elif key == "submission":
-                current_sub.update(value)
-            else:
-                flag[key] = value
-        self.event(event_type, flag)
-        self.save(data)
+        with challenge_lock(self.challenge_dir, description="state.update_flag"):
+            data = self.load()
+            flag = data.setdefault("flag", {})
+            current_repro = flag.setdefault("reproduction", {})
+            current_sub = flag.setdefault("submission", {})
+            for key, value in patch.items():
+                if key == "reproduction":
+                    current_repro.update(value)
+                elif key == "submission":
+                    current_sub.update(value)
+                else:
+                    flag[key] = value
+            self.event(event_type, flag)
+            self.save(data)
         return flag
 
     def render(self, data: dict[str, Any] | None = None) -> str:
@@ -286,6 +381,7 @@ class StateStore:
             f"- Category: `{challenge.get('category')}`",
             f"- AI Mode: `{challenge.get('mode')}`",
             f"- Status: `{data.get('status')}`",
+            f"- Revision: `{data.get('revision')}`",
             f"- Authorization confirmed: `{data.get('authorization', {}).get('confirmed')}`",
             f"- Operator constraints: {', '.join(data.get('operator_constraints', [])) or 'NONE'}",
             f"- Current objective: {data.get('current_objective')}",

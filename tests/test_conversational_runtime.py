@@ -78,28 +78,32 @@ def test_context_compacts_state_evidence_and_logs(tmp_path: Path):
         confirm_authorization=True,
         constraints=["no_auto_submit"],
     )
-    store = StateStore(challenge)
-    store.add_fact("Root page exists", ["LOG-000001"])
-    store.add_hypothesis("Login is injectable", "Compare inputs", "Different response")
-    store.add_technique("admin:admin", "failed", ["LOG-000002"])
-    store.set_next("Diff login responses")
-
     from ctf_agent.runner import run_command
 
-    run_command(challenge, ["printf", "hello\n"], "hello", "test", quiet=True)
+    # Create real LOG-* fixtures first so strict evidence references resolve.
+    log1 = run_command(challenge, ["printf", "hello\n"], "hello", "test", quiet=True)["id"]
+    log2 = run_command(challenge, ["printf", "bye\n"], "bye", "test", quiet=True)["id"]
+    store = StateStore(challenge)
+    store.add_fact("Root page exists", [log1])
+    store.add_hypothesis("Login is injectable", "Compare inputs", "Different response")
+    store.add_technique("admin:admin", "failed", [log2])
+    store.set_next("Diff login responses")
+
     context = build_context(challenge)
     assert context["status"] == "AUTHORIZED"
     assert context["operator_constraints"] == ["no_auto_submit"]
     assert context["facts"][0]["statement"] == "Root page exists"
     assert context["open_hypotheses"][0]["id"] == "H-0001"
     assert context["failed_techniques"][0]["technique"] == "admin:admin"
-    assert context["recent_logs"][0]["id"] == "LOG-000001"
+    assert context["recent_logs"][0]["id"] == log2
+    assert context["recent_logs"][1]["id"] == log1
 
     markdown = render_context_markdown(context)
     assert "Root page exists" in markdown
     assert "Diff login responses" in markdown
     assert "no_auto_submit" in markdown
-    assert "LOG-000001" in markdown
+    assert log1 in markdown
+    assert log2 in markdown
 
 
 def test_web_inventory_parses_forms_and_robots(tmp_path: Path):

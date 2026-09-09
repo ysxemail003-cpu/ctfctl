@@ -1,8 +1,10 @@
-PY ?= .venv/bin/python
-PYTEST ?= .venv/bin/pytest
-RUFF ?= .venv/bin/ruff
-MYPY ?= .venv/bin/mypy
-COVERAGE ?= .venv/bin/coverage
+# Prefer the local venv when present; otherwise fall back to PATH tools
+# (GitHub Actions installs dev deps into the system interpreter).
+PY ?= $(or $(wildcard .venv/bin/python),python3)
+PYTEST ?= $(or $(wildcard .venv/bin/pytest),pytest)
+RUFF ?= $(or $(wildcard .venv/bin/ruff),ruff)
+MYPY ?= $(or $(wildcard .venv/bin/mypy),mypy)
+COVERAGE ?= $(or $(wildcard .venv/bin/coverage),coverage)
 
 .PHONY: install dev test lint typecheck coverage build check bench demo scan-secrets doctor clean
 

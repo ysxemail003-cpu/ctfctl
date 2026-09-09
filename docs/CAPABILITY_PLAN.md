@@ -718,10 +718,28 @@ Batch 1 完成前不启动 E（racing）、F（沙箱）、D 的自动领题，�
 - 残余/待办：真实 LLM 基线（`--driver solver`）仍未跑（待 operator）；suite v3（hard/网络模糊/
   深逆向）与 Phase D/E 未开始。
 
-### 批次 1g（规划中）
+### 批次 1g（Phase D 平台桥 + 轨迹导出，2026-09-09）
 
-- Phase D：平台桥（CTFd pull/同步，mock 全链路测试）+ `trajectory export`（CSAW 风格轨迹）→
-  Phase E（并行竞速）。
+> D1/D2 完成；D3 提交门禁复用既有约束体系（pull 默认 `no_auto_submit`）。
+
+- `src/ctf_agent/platform.py` + `ctfctl platform ctfd list|pull`：`NormalizedChallenge` 抽象 +
+  CTFd v1 JSON 客户端（stdlib urllib，零新依赖）；token 仅从环境读取（默认 `CTFD_TOKEN`，绝不落盘）；
+  附件下载 host 锁死（跨主机拒绝，防 SSRF）；pull = 建 AI_NATIVE 工作区（自动带
+  `no_auto_submit` 约束）+ 附件经 ingest 导入 original/，二次 pull 幂等跳过。
+- `src/ctf_agent/trajectory.py` + `ctfctl trajectory export`：聚合 logs 动作 / evidence 账本 /
+  agent_rounds / flag 记录 → CSAW 风格 `reports/trajectory-<name>.json` + Markdown 旁路；
+  只使用已脱敏的存储数据。
+- 测试：mock CTFd 全链路（list/detail/download/submit、跨主机拒绝、pull 建目录+附件+约束、
+  幂等）+ trajectory 聚合（含真实 solver round）。共 8 个新用例。
+- 提交点：`<见 git log：Phase D 提交>`。
+- 残余/待办：真实 CTFd 实例未联调（端点为 CTFd>=3 v1 约定，若目标实例字段不同需微调，模块
+  已文档化）；scoreboard/HTB 等平台未做（平台抽象已留扩展点）；Phase E（并行竞速）未开始。
+
+### 批次 1h（规划中）
+
+- Phase E：并行竞速（多 worker/多模型，预算控制，幂等仲裁）→ 之后回到开源发布准备（Phase H）。
+
+
 
 
 

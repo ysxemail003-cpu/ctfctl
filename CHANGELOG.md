@@ -2,7 +2,21 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] - capability phase (Batch 1f: suite v2 expansion)
+## [Unreleased] - capability phase (Batch 1g: Phase D platform bridge + trajectory)
+
+### Added
+- Platform bridge (`ctf_agent/platform.py` + `ctfctl platform ctfd list|pull`): `NormalizedChallenge`
+  abstraction and a minimal CTFd v1 JSON client over stdlib urllib (no new deps). Token read from
+  environment only (never written to disk); attachment downloads are host-locked (no SSRF);
+  `pull` creates AI_NATIVE workspaces with a persistent `no_auto_submit` constraint and imports
+  attachments via the normal ingest path. Submission stays behind existing `flag submit` gates.
+- Trajectory export (`ctf_agent/trajectory.py` + `ctfctl trajectory export`): aggregates logged
+  actions, evidence ledger, agent rounds and flag record into a CSAW-style machine-readable
+  `reports/trajectory-<name>.json` plus a Markdown sidecar. Only already-redacted stored data is used.
+- Tests: mock-CTFd integration (list/detail/download/submit, cross-host refusal, workspace pull +
+  idempotency) and trajectory aggregation (actions/evidence/rounds/flag, persisted outputs).
+
+
 
 ### Added
 - 6 new original medium challenges (one per category), giving every category an easy + medium:

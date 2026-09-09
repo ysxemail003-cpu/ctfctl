@@ -378,6 +378,29 @@ def build_parser() -> argparse.ArgumentParser:
     solve.add_argument("--action-timeout", type=float, default=120.0)
     solve.add_argument("--model-timeout", type=float, default=300.0)
 
+    # platform bridge
+    platform = subparsers.add_parser("platform", help="CTF platform bridge (CTFd)")
+    platform_sub = platform.add_subparsers(dest="platform_tool", required=True)
+    ctfd = platform_sub.add_parser("ctfd", help="CTFd operations")
+    ctfd_sub = ctfd.add_subparsers(dest="ctfd_command", required=True)
+    ctfd_list = ctfd_sub.add_parser("list", help="List challenges on the CTFd instance")
+    ctfd_list.add_argument("--url", required=True)
+    ctfd_list.add_argument("--token-env", default="CTFD_TOKEN")
+    ctfd_pull = ctfd_sub.add_parser("pull", help="Pull challenges into the workspace (attachments + no_auto_submit)")
+    ctfd_pull.add_argument("--url", required=True)
+    ctfd_pull.add_argument("--token-env", default="CTFD_TOKEN")
+    ctfd_pull.add_argument("--event", required=True)
+    ctfd_pull.add_argument("--category", default=None)
+    ctfd_pull.add_argument("--workspace", default=None)
+    ctfd_pull.add_argument("--max", type=int, default=50)
+    ctfd_pull.add_argument("--no-attachments", action="store_true")
+
+    # trajectory export
+    trajectory = subparsers.add_parser("trajectory", help="Export a challenge trajectory (CSAW-style)")
+    trajectory_sub = trajectory.add_subparsers(dest="trajectory_command", required=True)
+    trajectory_export = trajectory_sub.add_parser("export", help="Write reports/trajectory-<name>.json and .md")
+    add_challenge_dir(trajectory_export)
+
     # sync agents
     sync = subparsers.add_parser("sync-agents", help="Generate Claude Code and Codex agent files")
     sync.add_argument("--install-codex", action="store_true", help="Also install skills into ~/.codex/skills")

@@ -79,6 +79,8 @@ stale result.
 | `.runtime.lock` | Challenge mutation lock (`fcntl.flock`, reentrant) | runtime |
 | `state.yaml#revision` | Revision counter for CAS saves | runtime |
 | `reports/merged-results.jsonl` | Idempotent specialist merge history | `ctfctl merge-result` |
+| `.scope.yaml#usage` | Budget/usage ledger (requests, ports, runtime) | runtime |
+| `artifacts/http/sessions/<id>/` | Cookie session + request replay evidence | `tool http --session` |
 | `flags/flag.yaml` | Flag lifecycle | `ctfctl flag` |
 
 ## Specialist protocol

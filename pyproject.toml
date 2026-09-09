@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ctf-agent"
-version = "0.2.0"
+version = "0.3.0"
 description = "Evidence-first AI CTF agent runtime for Kali Linux"
 requires-python = ">=3.11"
 dependencies = ["PyYAML>=6.0"]
@@ -36,9 +36,9 @@ branch = true
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-# Phase 0 baseline is 66% overall. Raise toward the 80% DoD gate as the
-# concurrency/security regression tests in this optimization land.
-fail_under = 60
+# Batches 1-2 raised coverage to 70%. DoD target remains 80%; raise this
+# gate as CLI/adapter regression tests land in later batches.
+fail_under = 70
 
 [tool.ruff]
 line-length = 120

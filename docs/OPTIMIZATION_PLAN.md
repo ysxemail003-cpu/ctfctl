@@ -684,3 +684,31 @@ a30bf84 baseline: ctf-agent v0.2.0, 26 tests passing
 - **HTTP 响应 Set-Cookie/Authorization 脱敏入库** 在 HTTP adapter 层尚未接入（先由 E/Phase 4 统一做）。
 - 覆盖率从 66% 提升有限（总体仍低于 DoD 80%，`cli.py`/ghidra adapter 是主要缺口）；`fail_under` 暂为 60，需在后续批次随测试补强上调。
 - 质量门槛中的“超额预算无法执行”DoD 项依赖上述 scope limits 记账落地。
+
+## 13. 实施状态记录（第二批，2026-09-09）
+
+> 第二批完成 Phase 2 的 scope limits 运行时强制 + Developer E（HTTP Session，Phase 4 核心）。
+
+### 已完成
+
+- **scope limits 运行时强制（Phase 2 Task D）**：
+  - `.scope.yaml` 新增 `usage:` 账本（requests/scan_ports/runtime_seconds/concurrent_commands/last_request_at），由 `ScopeStore.commit_usage()` 在 challenge 锁内原子提交；
+  - 执行点：HTTP adapter 每次请求 `requests+1`（含速率窗口检查）、nmap adapter 提交 `scan_ports`、flag 提交计 1 请求、`run_command/run_tty` 预检运行时预算并在结束后提交墙钟秒数；
+  - `max_output_bytes` 由 runner 截断执行（第一批已接入）。
+- **HTTP 响应头脱敏入库**：`Authorization`/`Cookie`/`Set-Cookie`/`X-Api-Key` 等写入 logs 前替换为 `[REDACTED:hash]`；URL 中的 `token=`/`password=` 等内联值同样脱敏。
+- **Developer E / HTTP Session（Phase 4 核心）**：`tool http --session ID` 持久化 Cookie jar；`artifacts/http/sessions/<id>/` 下保存 `session.json`/`cookies.json`/`requests.jsonl` 与每请求 body/headers 文件（脱敏 headers、body hash/size、redirect chain、timing、请求体供重放）；`tool http-session show|replay ID` 检视与重放；重定向逐跳 scope 检查保留。
+- **版本**：bump 至 0.3.0；覆盖率门禁上调至 70%（当前总体 70%）。
+
+### 提交点
+
+```text
+<第二批提交 hash 见 git log，追加于本段之后>
+```
+
+### 未完成 / 残余风险（下一批）
+
+- **Phase 4 增强项**：session 级显式 Authorization 头重放（脱敏后不可复原，登录流程依赖 Cookie 会话；如需要可增加"允许明文 artifact"开关）；跨 scope 重定向已有拒绝，但重放时依赖原始 URL 存于 session artifact。
+- **Phase 3 Task C 任务租约**（active_tasks/lease）未实施（方案标注"如需要"）。
+- **Phase 5**（logs/index.json 或 SQLite、CLI 拆分、TypedDict 重构、归档与基准）未开始。
+- 覆盖率 70% 仍低于 DoD 80%（cli.py 47%、ghidra adapter、recon/elf adapter 为缺口）。
+- `concurrent_commands` 限制未独立记账（challenge 锁已将单 challenge 命令串行化，跨 challenge 由各自 scope 独立约束）。

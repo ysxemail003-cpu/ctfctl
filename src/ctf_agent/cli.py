@@ -361,6 +361,15 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--only", default=None, help="Run a single challenge id")
     bench.add_argument("--timeout", type=float, default=180.0, help="Per-challenge driver timeout")
 
+    # solve loop
+    solve = subparsers.add_parser("solve", help="Run the autonomous solve loop against the current challenge")
+    add_challenge_dir(solve)
+    solve.add_argument("--backend", choices=["auto", "codex", "claude", "gemini"], default="auto")
+    solve.add_argument("--max-rounds", type=int, default=8)
+    solve.add_argument("--max-actions", type=int, default=3)
+    solve.add_argument("--action-timeout", type=float, default=120.0)
+    solve.add_argument("--model-timeout", type=float, default=300.0)
+
     # sync agents
     sync = subparsers.add_parser("sync-agents", help="Generate Claude Code and Codex agent files")
     sync.add_argument("--install-codex", action="store_true", help="Also install skills into ~/.codex/skills")

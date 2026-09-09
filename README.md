@@ -128,6 +128,7 @@ export CTF_CHALLENGE_DIR="$PWD/workspace/contests/2026-demo/web-login"
 ./tools/ctfctl use EVENT/CHALLENGE
 ./tools/ctfctl status --markdown
 ./tools/ctfctl context --markdown
+./tools/ctfctl solve --backend auto   # autonomous solve loop (codex/claude/gemini)
 ```
 
 ### Commands and tools

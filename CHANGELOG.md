@@ -2,7 +2,27 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] - capability phase (Batch 1c: Phase C benchmark suite v1)
+## [Unreleased] - capability phase (Batch 1d: Phase B solver skeleton)
+
+### Added
+- Model backends (`ctf_agent/backends.py`): uniform `complete(prompt)` over codex (`codex exec -o`),
+  claude (`claude -p`), gemini (`gemini -p`); PATH detection, clear missing-CLI errors, `auto`
+  preference order; no live model calls in tests.
+- Solve-loop engine (`ctf_agent/solver.py` + `ctfctl solve`): PLAN-less round loop
+  (round = prompt -> policy JSON action -> execute `ctfctl run|tool` actions -> record), with
+  static per-category playbook injection (skill injection), round recording under
+  `<challenge>/agent_rounds/round-<NN>/` (prompt.md/response.json/record.json), flag detection in
+  action output or model `flag_candidate`, canonical flag-candidate recording, and stop conditions:
+  solved flag, policy `conclusion: stuck`, two idle rounds without new evidence, or `max_rounds`.
+- Policies: `ScriptedPolicy` (deterministic tests/replays) and `BackendPolicy` (strict JSON action
+  object parsing with one tolerated bad reply).
+
+### Tested
+- 17 backend/solver tests (argv builders, availability errors, JSON extraction, solved via output
+  flag, solved via candidate, stuck on idle/conclusion/invalid replies, event + flag-candidate
+  recording). `make check`: ruff/mypy clean.
+
+
 
 ### Added
 - Capability benchmark harness (`ctf_agent/bench.py` + `ctfctl bench`): discovers

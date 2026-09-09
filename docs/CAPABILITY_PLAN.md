@@ -667,9 +667,32 @@ Batch 1 完成前不启动 E（racing）、F（沙箱）、D 的自动领题，�
   solve.py 驱动目前是“脚本模式”，Phase B 的 LLM solver 接入后 bench 增加 `--driver solver` 选项；
   `actions` 目前只统计命令数，token/成本统计待 Phase B 后端接入。
 
-### 批次 1d（规划中）
+### 批次 1d（Phase B 求解循环骨架，2026-09-09）
 
-- Phase B 求解循环骨架（`backends.py` + `solver.py`）→ bench 接入 solver driver → suite v2 扩容。
+> 完成 B1（后端抽象）、B2（求解循环）、B3 基础（round 记录/停止规则）、B4 静态 playbook 注入。
+
+- `src/ctf_agent/backends.py`：`CliBackend`（codex `exec -o` / claude `-p` / gemini `-p`）+
+  可用性探测 + `auto` 优先级；缺失 CLI 报清晰错误，不静默。
+- `src/ctf_agent/solver.py` + `ctfctl solve`：round 循环 = 组合 prompt（state digest + 文件清单 +
+  分类 playbook + 历史轮次）→ 策略产出 JSON 动作（`analysis/commands/flag_candidate/conclusion`）
+  → 引擎校验并执行 `ctfctl run|tool`（每条动作留痕、可解析 LOG id）→ `agent_rounds/round-NN/`
+  落盘 + events 记录；flag 在输出中或候选中出现即记入 flag.candidate 并 SOLVED；停止条件：
+  conclusion=stuck / 连续两轮无新证据 / max_rounds。`ScriptedPolicy`（测试确定性）+ `BackendPolicy`
+  （JSON 严格解析，容忍一次坏回复）。
+- 测试：17 个（argv 构造、可用性错误、JSON 提取、输出检测到 flag→SOLVED、candidate→SOLVED、
+  idle/conclusion/两次坏回复→STUCK、事件与 flag 记录）。codex/claude CLI 本机已装；未做真实模型
+  调用（避免无谓成本），真实跑分待 operator 显式执行。
+- 提交点：`<见 git log：Phase B skeleton 提交>`。
+- 残余/待办：网络类动作仍走既有 scope 门禁但 v1 动作集仅允许 `run|tool`；求解成功不自动推进
+  state 生命周期（SOLVED 由既有 flag verify/submit 流程接管）；PLAN 步骤为“每轮 prompt 内联”
+  而非独立 plan.md 文件；bench 的 `--driver solver` 与 suite v2（每类 ≥2、含 medium）未开始。
+
+### 批次 1e（规划中）
+
+- bench 接入 solver driver（`--driver solver`，可跑真实 LLM 对照基线）→ suite v2 扩容 →
+  Phase D/E（平台桥+轨迹导出、并行竞速）。
+
+
 
 
 
